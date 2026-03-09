@@ -1,11 +1,20 @@
 {% extends "base.html" %}
 {% block title %}Control Panel |{% endblock %}
 {% block content %}
-  <!-- Back Button -->
+  <!-- Back Button and Dev Mode Badge -->
   <div class="container-fluid pt-3">
-    <a href="https://meduseld.io/menu" class="btn btn-warning btn-sm">
-      <i class="cil-arrow-left"></i> Back to Services
-    </a>
+    <div class="d-flex justify-content-between align-items-center">
+      <div class="d-flex align-items-center gap-2">
+        <a href="https://menu.meduseld.io" class="btn btn-warning btn-sm">
+          <i class="cil-arrow-left"></i> Back to Services
+        </a>
+        {% if dev_mode %}
+        <span class="badge bg-warning text-dark px-3 py-2" style="font-size: 0.9rem;">
+          <i class="cil-code"></i> DEV MODE
+        </span>
+        {% endif %}
+      </div>
+    </div>
   </div>
   
   <!-- Logo -->
@@ -366,15 +375,6 @@
       restartCard.classList.add("disabled");
       killCard.classList.add("disabled");
     }
-    // ===== SPINNER ICON =====
-
-    if (restartIcon) {
-      if (state === "restarting") {
-        restartIcon.className = "spinner-border spinner-border-sm me-2";
-      } else {
-        restartIcon.className = "cil-loop-circular me-2";
-      }
-    }
   }
 
 
@@ -403,7 +403,9 @@
 
       if (res.status === 429) {
         const data = await res.json();
-        alert("Restart cooldown active. Try again in " + data.remaining + " seconds.");
+        const remaining = data.remaining || 'a few';
+        alert("Restart cooldown active. Try again in " + remaining + " seconds.");
+        return;
       }
 
       updateStats();

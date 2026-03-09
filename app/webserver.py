@@ -13,28 +13,37 @@ from collections import deque
 from functools import wraps
 from datetime import datetime
 
-app = Flask(__name__)
+# Get the directory where this script is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+app = Flask(
+    __name__,
+    static_folder=os.path.join(BASE_DIR, "static"),
+    template_folder=os.path.join(BASE_DIR, "templates")
+)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # ================= CONFIG =================
 
 try:
+    import config
     from config import *
-except ImportError:
-    # Fallback to defaults if config.py doesn't exist
+except ImportError as e:
+    # Fallback to Linux defaults if config.py doesn't exist
     logger_temp = logging.getLogger(__name__)
-    logger_temp.warning("config.py not found, using default configuration")
+    logger_temp.warning(f"config.py not found, using default Linux configuration: {e}")
     
-    LAUNCH_EXE = r"C:\icarusserver\IcarusServer.exe"
-    LAUNCH_SCRIPT = r"launch_server.bat"
-    PROCESS_NAME = "IcarusServer-Win64-Shipping.exe"
-    LOG_FILE = r"C:\icarusserver\Icarus\Saved\Logs\Icarus.log"
-    UPDATE_SCRIPT = r"C:\icarusserver\updateserver.bat"
+    IS_DEV = False
+    IS_PRODUCTION = True
+    SERVER_DIR = "/home/vertebra/games/icarus"
+    LAUNCH_EXE = f"{SERVER_DIR}/start.sh"
+    LAUNCH_SCRIPT = f"{SERVER_DIR}/start.sh"
+    PROCESS_NAME = "IcarusServer.exe"
+    LOG_FILE = f"{SERVER_DIR}/Icarus/Saved/Logs/Icarus.log"
+    UPDATE_SCRIPT = f"{SERVER_DIR}/updateserver.sh"
     STEAM_APP_ID = "2089300"
-    VERSION_FILE = r"C:\icarusserver\version.txt"
-    SERVER_DIR = r"C:\icarusserver"
+    VERSION_FILE = f"{SERVER_DIR}/version.txt"
     SERVER_ARGS = ["-SteamServerName=404localserver", "-Port=17777", "-QueryPort=27015", "-Log"]
-    ALLOWED_HOSTS = ["localhost", "127.0.0.1", "meduseld.io", "panel.meduseld.io"]
     RATE_LIMIT_WINDOW = 60
     RATE_LIMIT_MAX_REQUESTS = 10
     RESTART_COOLDOWN = 30
@@ -85,6 +94,10 @@ history = deque(maxlen=60)
 log_buffer = deque(maxlen=500)
 activity_log = deque(maxlen=100)  # Track user actions
 
+# Dev mode: fake server running state
+dev_server_running = False
+dev_server_start_time = 0
+
 # Rate limiting
 request_history = deque(maxlen=100)
 
@@ -98,8 +111,12 @@ thread_health = {
 ALLOWED_HOSTS = [
     "localhost",
     "127.0.0.1",
+    "192.168.1.175",
     "meduseld.io",
-    "panel.meduseld.io"
+    "menu.meduseld.io",
+    "panel.meduseld.io",
+    "ssh.meduseld.io",
+    "terminal.meduseld.io"
 ]
 
 # Valid state transitions
@@ -114,7 +131,7 @@ VALID_TRANSITIONS = {
 
 # ================= UTILITIES =================
 
-def set_server_state(new_state):
+def set_server_state(new_state, force=False):
     """Thread-safe state setter with validation"""
     global server_state
     
@@ -124,13 +141,16 @@ def set_server_state(new_state):
         if new_state == old_state:
             return True
         
-        # Validate transition
-        if new_state not in VALID_TRANSITIONS.get(old_state, []):
+        # Validate transition (unless forced)
+        if not force and new_state not in VALID_TRANSITIONS.get(old_state, []):
             logger.warning(f"Invalid state transition: {old_state} -> {new_state}")
             return False
         
         server_state = new_state
-        logger.info(f"State transition: {old_state} -> {new_state}")
+        if force:
+            logger.info(f"State transition (forced): {old_state} -> {new_state}")
+        else:
+            logger.info(f"State transition: {old_state} -> {new_state}")
         return True
 
 def get_server_state():
@@ -223,33 +243,35 @@ def detect_initial_state():
             server_state = "offline"
         logger.info("Server detected as offline on startup")
 
-# ================= HOST ROUTING =================
+# ================= HOST VALIDATION =================
 
 @app.before_request
-def route_by_host():
+def validate_host():
     host = request.host.split(":")[0]
+    
+    # Log all request details for debugging
+    logger.info(f"Request to {request.path} from host: {host}, headers: {dict(request.headers)}")
 
-    # Allow localhost for development
-    if host in ["localhost", "127.0.0.1"]:
+    if host in ALLOWED_HOSTS:
         return
 
-    # Landing page only
-    if host == "meduseld.io":
-        if request.path.startswith("/api") or request.path in ["/start", "/stop", "/restart", "/kill"]:
-            abort(403)
+    if host.startswith("192.168.") or host.startswith("10.") or host.startswith("172."):
         return
 
-    # Panel domain
-    if host == "panel.meduseld.io":
-        return
-
-    abort(404)
+    abort(403)
 
 # ================= SERVER CONTROL =================
 
 def is_running():
     """Check if server process is running"""
+    global dev_server_running
+    
+    if IS_DEV:
+        # In dev mode, use fake state
+        return dev_server_running
+    
     try:
+        # Production: check by process name
         for proc in psutil.process_iter(["name"]):
             if proc.info["name"] and PROCESS_NAME in proc.info["name"]:
                 return True
@@ -259,41 +281,57 @@ def is_running():
 
 def launch_server():
     """Launch the game server as a completely independent process"""
+    global dev_server_running, dev_server_start_time
+    
     try:
-        # Check if launch script exists, use it for better process isolation
-        if 'LAUNCH_SCRIPT' in globals() and os.path.exists(LAUNCH_SCRIPT):
-            # Use the batch file which uses 'start' command for true independence
-            subprocess.Popen(
-                [LAUNCH_SCRIPT],
-                shell=True,
-                cwd=os.path.dirname(os.path.abspath(LAUNCH_SCRIPT)) if os.path.dirname(LAUNCH_SCRIPT) else ".",
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-            logger.info("Server launched via batch script (independent process)")
+        if IS_DEV:
+            # In dev mode, just set the fake state
+            dev_server_running = True
+            dev_server_start_time = time.time()
+            logger.info("Dummy server 'started' (simulated)")
         else:
-            # Fallback to direct launch with start command
-            cmd = f'start /B "" "{LAUNCH_EXE}" {" ".join(SERVER_ARGS)}'
-            
-            subprocess.Popen(
-                cmd,
-                cwd=SERVER_DIR,
-                shell=True,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-            logger.info("Server launched directly (independent process)")
+            # Production: Check if launch script exists, use it for better process isolation
+            if 'LAUNCH_SCRIPT' in globals() and os.path.exists(LAUNCH_SCRIPT):
+                # Use the script which uses proper process isolation
+                subprocess.Popen(
+                    [LAUNCH_SCRIPT],
+                    shell=True,
+                    cwd=os.path.dirname(os.path.abspath(LAUNCH_SCRIPT)) if os.path.dirname(LAUNCH_SCRIPT) else ".",
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                logger.info("Server launched via script (independent process)")
+            else:
+                # Fallback to direct launch
+                subprocess.Popen(
+                    [LAUNCH_EXE] + SERVER_ARGS,
+                    cwd=SERVER_DIR,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                logger.info("Server launched directly (independent process)")
     except Exception as e:
         logger.error(f"Failed to launch server: {e}")
         raise
 
 def kill_server():
     """Kill the game server process"""
+    global dev_server_running
+    
     try:
-        subprocess.call(f'taskkill /IM "{PROCESS_NAME}" /F', shell=True)
-        logger.info("Server kill command executed")
+        if IS_DEV:
+            # In dev mode, just clear the fake state
+            dev_server_running = False
+            logger.info("Dummy server 'killed' (simulated)")
+        else:
+            # Production: Use taskkill on Windows or pkill on Linux
+            if os.name == 'nt':
+                subprocess.call(f'taskkill /IM "{PROCESS_NAME}" /F', shell=True)
+            else:
+                subprocess.call(f'pkill -9 -f "{PROCESS_NAME}"', shell=True)
+            logger.info("Server kill command executed")
     except Exception as e:
         logger.error(f"Failed to kill server: {e}")
 
@@ -326,31 +364,49 @@ def get_system_stats():
 def get_icarus_usage():
     """Get Icarus server resource usage"""
     try:
-        for proc in psutil.process_iter(["name"]):
-            if proc.info["name"] and PROCESS_NAME in proc.info["name"]:
-                try:
-                    p = psutil.Process(proc.pid)
+        if IS_DEV:
+            # In dev mode, return fake stats for the dummy server
+            import random
+            return {
+                "cpu": round(random.uniform(5, 15), 2),
+                "cpu_raw": round(random.uniform(20, 60), 2),
+                "ram": round(random.uniform(2.5, 4.5), 2)
+            }
+        else:
+            # Production: get real process stats
+            for proc in psutil.process_iter(["name"]):
+                if proc.info["name"] and PROCESS_NAME in proc.info["name"]:
+                    try:
+                        p = psutil.Process(proc.pid)
 
-                    p.cpu_percent(None)
-                    time.sleep(0.2)
+                        p.cpu_percent(None)
+                        time.sleep(0.2)
 
-                    cpu_raw = p.cpu_percent(None)
-                    cpu_norm = round(cpu_raw / psutil.cpu_count(), 2)
+                        cpu_raw = p.cpu_percent(None)
+                        cpu_norm = round(cpu_raw / psutil.cpu_count(), 2)
 
-                    return {
-                        "cpu": cpu_norm,
-                        "cpu_raw": cpu_raw,
-                        "ram": round(p.memory_info().rss / (1024**3), 2)
-                    }
-                except Exception as e:
-                    logger.error(f"Error getting process stats: {e}")
-                    return None
+                        return {
+                            "cpu": cpu_norm,
+                            "cpu_raw": cpu_raw,
+                            "ram": round(p.memory_info().rss / (1024**3), 2)
+                        }
+                    except Exception as e:
+                        logger.error(f"Error getting process stats: {e}")
+                        return None
     except Exception as e:
         logger.error(f"Error iterating processes: {e}")
     return None
 
 def get_uptime():
     """Get server uptime in seconds"""
+    global dev_server_start_time
+    
+    if IS_DEV:
+        # In dev mode, calculate from fake start time
+        if dev_server_running and dev_server_start_time > 0:
+            return int(time.time() - dev_server_start_time)
+        return 0
+    
     try:
         for proc in psutil.process_iter(["name", "create_time"]):
             if proc.info["name"] and PROCESS_NAME in proc.info["name"]:
@@ -500,55 +556,38 @@ def monitor_server():
 
 @app.route("/")
 def home():
-    host = request.host.split(":")[0]
-
-    # Local development → show dashboard
-    if host in ["localhost", "127.0.0.1"]:
-        running = is_running()
-        stats = get_system_stats()
-        icarus_stats = get_icarus_usage() if running else None
-        logs = read_log() if running else []
-
-        return render_template(
-            "dashboard.html",
-            running=running,
-            stats=stats,
-            icarus_stats=icarus_stats,
-            logs=logs,
-        )
-
-    # Root domain → landing page
-    if host == "meduseld.io":
-        return render_template("landing.html")
-
-    # Panel subdomain → dashboard
-    if host == "panel.meduseld.io":
-        running = is_running()
-        stats = get_system_stats()
-        icarus_stats = get_icarus_usage() if running else None
-        logs = read_log() if running else []
-
-        return render_template(
-            "dashboard.html",
-            running=running,
-            stats=stats,
-            icarus_stats=icarus_stats,
-            logs=logs,
-        )
-
-    return "Unknown host", 404
-
-@app.route("/menu")
-def menu():
-    """Service selection menu"""
+    """Route based on hostname"""
     host = request.host.split(":")[0]
     
-    # Only allow menu on main domain
-    if host in ["meduseld.io", "localhost", "127.0.0.1"]:
-        return render_template("menu.html")
+    # If accessed via ssh subdomain, show terminal wrapper
+    if host == "ssh.meduseld.io":
+        return render_template("terminal.html")
     
-    # Redirect other hosts to their appropriate page
-    return "Access menu from meduseld.io", 403
+    # Otherwise show the Icarus control panel
+    running = is_running()
+    stats = get_system_stats()
+    icarus_stats = get_icarus_usage() if running else None
+    logs = read_log() if running else []
+    
+    return render_template(
+        "panel.html",
+        running=running,
+        stats=stats,
+        icarus_stats=icarus_stats,
+        logs=logs,
+        dev_mode=IS_DEV
+    )
+
+@app.route("/terminal")
+def terminal_proxy():
+    """Proxy requests to ttyd"""
+    import requests as req
+    try:
+        resp = req.get("http://localhost:7681", stream=True, timeout=5)
+        return resp.content, resp.status_code, resp.headers.items()
+    except Exception as e:
+        logger.error(f"Error proxying to ttyd: {e}")
+        return f"Terminal unavailable: {e}", 503
 
 @app.route("/start", methods=["POST"])
 @rate_limit
@@ -719,17 +758,27 @@ def restart():
 def kill():
     log_activity("FORCE KILL server")
     
-    if not is_running():
-        set_server_state("offline")
+    if IS_DEV:
+        # In dev mode, immediately kill and reset state
+        kill_server()
+        set_server_state("offline", force=True)
+        logger.info("Dummy server force killed (simulated)")
         return "", 204
     
-    if not set_server_state("stopping"):
-        return jsonify({"error": "Invalid state transition"}), 400
+    if not is_running():
+        set_server_state("offline", force=True)
+        return "", 204
+    
+    # Force state to stopping (kill should always work)
+    set_server_state("stopping", force=True)
 
     def kill_sequence():
         # First kill attempt
         logger.info("Executing force kill")
-        subprocess.call(f'taskkill /IM "{PROCESS_NAME}" /F', shell=True)
+        if os.name == 'nt':
+            subprocess.call(f'taskkill /IM "{PROCESS_NAME}" /F', shell=True)
+        else:
+            subprocess.call(f'pkill -9 -f "{PROCESS_NAME}"', shell=True)
         
         # Wait for process to die
         for _ in range(15):
@@ -741,7 +790,10 @@ def kill():
         
         # If still running, try again
         logger.warning("Server still running, retrying kill")
-        subprocess.call(f'taskkill /IM "{PROCESS_NAME}" /F', shell=True)
+        if os.name == 'nt':
+            subprocess.call(f'taskkill /IM "{PROCESS_NAME}" /F', shell=True)
+        else:
+            subprocess.call(f'pkill -9 -f "{PROCESS_NAME}"', shell=True)
         time.sleep(2)
         
         # Final check
@@ -757,29 +809,53 @@ def kill():
 
 # ================= API =================
 
+@app.route("/api/console")
+def api_console():
+    # Use the LOG_FILE from config instead of hardcoded path
+    if not os.path.exists(LOG_FILE):
+        return jsonify({"lines": []})
+
+    try:
+        with open(LOG_FILE, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()[-200:]
+        return jsonify({"lines": lines})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
 @app.route("/api/stats")
 def api_stats():
-    stats = get_system_stats()
-    running = is_running()
-    current_state = get_server_state()
+    try:
+        stats = get_system_stats()
+        running = is_running()
+        current_state = get_server_state()
 
-    return jsonify({
-        "state": current_state,
-        "stats": stats,
-        "icarus": get_icarus_usage() if running else None,
-        "uptime": get_uptime() if running else 0,
-        "health": get_health(stats),
-        "last_update": {
-            "status": last_update_status,
-            "time": last_update_time
-        } if last_update_status else None,
-        "version": {
-            "current": current_build_id,
-            "latest": latest_build_id,
-            "update_available": current_build_id != latest_build_id if (current_build_id and latest_build_id) else None
-        },
-        "thread_health": thread_health
-    })
+        return jsonify({
+            "state": current_state,
+            "stats": stats,
+            "icarus": get_icarus_usage() if running else None,
+            "uptime": get_uptime() if running else 0,
+            "health": get_health(stats),
+            "last_update": {
+                "status": last_update_status,
+                "time": last_update_time
+            } if last_update_status else None,
+            "version": {
+                "current": current_build_id,
+                "latest": latest_build_id,
+                "update_available": current_build_id != latest_build_id if (current_build_id and latest_build_id) else None
+            },
+            "thread_health": thread_health
+        })
+    except Exception as e:
+        logger.error(f"Error in /api/stats: {e}", exc_info=True)
+        return jsonify({
+            "error": str(e),
+            "state": "offline",
+            "stats": {"cpu": 0, "ram_percent": 0, "ram_used": 0, "ram_total": 0, "disk_percent": 0},
+            "icarus": None,
+            "uptime": 0,
+            "health": "unknown"
+        }), 500
 
 @app.route("/api/check-update")
 def api_check_update():

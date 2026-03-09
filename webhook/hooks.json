@@ -1,0 +1,32 @@
+[
+  {
+    "id": "deploy-meduseld",
+    "execute-command": "/scripts/deploy.sh",
+    "command-working-directory": "/scripts",
+    "response-message": "Deploying Meduseld...",
+    "trigger-rule": {
+      "and": [
+        {
+          "match": {
+            "type": "payload-hash-sha256",
+            "secret": "YOUR_WEBHOOK_SECRET_HERE",
+            "parameter": {
+              "source": "header",
+              "name": "X-Hub-Signature-256"
+            }
+          }
+        },
+        {
+          "match": {
+            "type": "value",
+            "value": "refs/heads/main",
+            "parameter": {
+              "source": "payload",
+              "name": "ref"
+            }
+          }
+        }
+      ]
+    }
+  }
+]

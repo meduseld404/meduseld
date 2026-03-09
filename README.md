@@ -1,218 +1,326 @@
-# Icarus Server Control Panel
+# Meduseld - Icarus Server Control Panel
 
-A Flask-based web control panel for managing Icarus dedicated game servers with automatic updates, monitoring, and health tracking.
+Hey! This is our web control panel for the Icarus game server. You can start/stop the server, check if it's running, view logs, and even SSH into the server - all from your browser.
 
-## Features
+## What You Can Do
 
-- **Server Control**: Start, stop, restart, and force kill server processes
-- **Automatic Updates**: Checks Steam for updates and runs update script on restart
-- **Real-time Monitoring**: Live stats, logs, and resource usage tracking
-- **Health Monitoring**: System and server health indicators
-- **Version Tracking**: Automatic detection of available updates
-- **Thread Safety**: Proper locking mechanisms to prevent race conditions
-- **Rate Limiting**: Protection against API abuse
-- **Comprehensive Logging**: Detailed logs for debugging and monitoring
-- **Graceful Shutdown**: Proper cleanup on application exit
-- **Thread Health Monitoring**: Detects and reports dead background threads
-- **Process Isolation**: Game server runs independently - panel can be restarted without affecting the game server
+### Control Panel (https://panel.meduseld.io)
+- **Start/Stop/Restart** the Icarus server
+- **Monitor** CPU, RAM, disk usage in real-time
+- **View live logs** from the game server
+- **Check for updates** - it'll tell you if there's a new version
+- **See graphs** of server performance over the last 30 minutes
+- **Force kill** if the server gets stuck
 
-## Site Structure
+### SSH Terminal (https://ssh.meduseld.io)
+- **Access the server** directly from your browser
+- No need to install PuTTY or any SSH client
+- Login with your Ubuntu username and password
+- Full terminal access - run any command you want
 
-```
-meduseld.io              → Landing page
-meduseld.io/menu         → Services hub (tile menu)
-panel.meduseld.io        → Icarus control panel
-```
+## How to Access
 
-Users access through Tailscale VPN, then navigate from landing → menu → service.
+1. Go to https://panel.meduseld.io or https://ssh.meduseld.io
+2. Cloudflare will ask for your email
+3. Check your email for the OTP code
+4. Enter the code and you're in!
 
-See [SITE_STRUCTURE.md](SITE_STRUCTURE.md) for detailed flow and [ADDING_SERVICES.md](ADDING_SERVICES.md) for adding new services.
+Your email needs to be added to the Cloudflare Access list. If you can't get in, ask Kyle to add you.
 
-## For Server Administrators
+## Making Changes to the Code
 
-This panel is designed to run on a dedicated server. Your users access it through their web browser - no installation needed on their end.
+If you want to modify the panel or fix something:
 
-**Admin Documentation:**
-- [ADMIN_SCRIPTS.md](ADMIN_SCRIPTS.md) - What each script does
-- [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) - Full deployment guide
-- [SERVICE_SETUP.md](SERVICE_SETUP.md) - Windows service setup
-
-**User Documentation:**
-- [USER_GUIDE.md](USER_GUIDE.md) - Share this with your friends
-
-## Installation
-
-1. Install Python dependencies:
+### 1. Clone the Repo
 ```bash
+git clone <repo-url>
+cd meduseld
+```
+
+### 2. Make Your Changes
+Edit files in the `app/` folder:
+- `app/webserver.py` - Main Flask application
+- `app/config.py` - Configuration settings
+- `app/templates/panel.html` - Control panel HTML
+- `app/templates/terminal.html` - SSH terminal wrapper
+- `app/static/css/style.css` - Styles
+
+### 3. Test Locally (Optional)
+```bash
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
+python app/webserver.py
 ```
 
-2. Configure your server settings in `config.py`
+Visit http://localhost:5000 to test.
 
-3. Ensure your `updateserver.bat` script exists at the configured path
-
-4. Run the server:
+### 4. Push Your Changes
 ```bash
-python webserver.py
+git add .
+git commit -m "Description of what you changed"
+git push
 ```
 
-5. **For Windows Service Setup**: See [SERVICE_SETUP.md](SERVICE_SETUP.md) for detailed instructions on running as a service without killing the game server
-
-## Updating the Panel
-
-### If using Git:
-```cmd
-update_panel.bat
-```
-This will:
-- Pull latest changes from git
-- Update Python dependencies
-- Restart the service
-- Verify it's running
-
-### If updating manually:
-1. Replace files with new versions
-2. Run `restart_panel.bat`
-
-### Manual restart:
-```cmd
-restart_panel.bat
-```
-Or use Windows services:
-```cmd
-net stop Meduseld
-net start Meduseld
+### 5. Deploy to Server
+SSH into the server and pull the changes:
+```bash
+ssh vertebra@meduseld.io
+cd ~/services/meduseld
+git pull
+sudo systemctl restart icarus-panel
 ```
 
-**Note**: The game server will NOT be affected when updating/restarting the panel!
+That's it! Your changes are live.
 
-## Configuration
+## Understanding the Code
 
-Edit `config.py` to customize:
+### Main Files
 
-- Server paths and executable
-- Launch arguments
-- Security settings (allowed hosts, rate limits)
-- Timing configuration (timeouts, intervals)
-- Health thresholds
-- Logging settings
-- Flask settings
+**app/webserver.py**
+- The Flask app that runs everything
+- Has routes for `/start`, `/stop`, `/restart`, `/kill`
+- API endpoints like `/api/stats`, `/api/logs`
+- Monitors the server process and collects metrics
 
-## API Endpoints
+**app/config.py**
+- All the settings (server paths, timeouts, thresholds)
+- Auto-detects if running in dev or production mode
+- Change `SERVER_DIR` if the Icarus server moves
 
-### Control Endpoints
-- `POST /start` - Start the server
-- `POST /stop` - Stop the server gracefully
-- `POST /restart` - Restart server with update check
-- `POST /kill` - Force kill the server
+**app/templates/panel.html**
+- The control panel UI
+- Uses Bootstrap for styling
+- Chart.js for the graphs
+- Updates every 5 seconds via JavaScript
 
-### API Endpoints
-- `GET /api/stats` - Get server and system stats
-- `GET /api/logs` - Get server logs
-- `GET /api/history` - Get historical stats
-- `GET /api/check-update` - Manually check for updates
-- `GET /api/update-output` - Get output from last update
+**app/templates/terminal.html**
+- Wrapper for the SSH terminal
+- Embeds ttyd (the terminal emulator)
+- Has navigation buttons to go back to menu
 
-## Security Features
+### How It Works
 
-1. **Host-based Routing**: Different content for different domains
-2. **Rate Limiting**: Prevents API abuse (configurable)
-3. **State Validation**: Ensures valid state transitions
-4. **Thread Safety**: Locks prevent race conditions
+```
+Your Browser
+    ↓
+Cloudflare (handles auth + HTTPS)
+    ↓
+Cloudflare Tunnel (routes to server)
+    ↓
+Flask App (port 5000) → Control Panel
+    ↓
+Monitors Icarus Server Process
+```
 
-## Improvements Implemented
+For SSH:
+```
+Your Browser
+    ↓
+Cloudflare
+    ↓
+ttyd (port 7681) → Terminal
+    ↓
+Ubuntu Server Shell
+```
 
-### Bug Fixes
-1. ✅ Fixed race conditions in state management with threading locks
-2. ✅ Fixed inconsistent quotes in kill commands
-3. ✅ Fixed stop endpoint logic to properly detect final state
-4. ✅ Prevented monitor thread from overriding user actions
-5. ✅ Added error handling for Steam API failures
-6. ✅ Fixed version file race conditions with locks
+### Key Concepts
 
-### Enhancements
-1. ✅ Added threading locks for state and version management
-2. ✅ Implemented state machine with valid transitions
-3. ✅ Added comprehensive Python logging
-4. ✅ Added retry logic with exponential backoff for Steam API
-5. ✅ Added startup validation for configuration
-6. ✅ Capture and expose update script output via API
-7. ✅ Added graceful shutdown handlers
-8. ✅ Implemented rate limiting on control endpoints
-9. ✅ Moved configuration to external config file
-10. ✅ Added startup state detection
-11. ✅ Implemented thread health monitoring
-12. ✅ Added detailed error logging throughout
+**Server States**
+- `offline` - Server not running
+- `starting` - Server is booting up
+- `running` - Server is online
+- `stopping` - Server is shutting down
+- `restarting` - Server is restarting (with update check)
+- `crashed` - Server died unexpectedly
 
-## State Machine
+**Process Detection**
+The panel looks for a process named `IcarusServer-Win64-Shipping.exe` (it runs via Wine on Ubuntu). If it finds it, the server is "running".
 
-Valid state transitions:
-- `offline` → `starting`, `crashed`
-- `starting` → `running`, `offline`, `crashed`
-- `running` → `stopping`, `restarting`, `crashed`
-- `stopping` → `offline`, `crashed`
-- `restarting` → `running`, `offline`, `crashed`
-- `crashed` → `starting`, `offline`
+**Update Detection**
+Checks Steam's API for the latest build ID and compares it to what's installed. If different, shows "Update Available".
 
-## Logging
+## Common Tasks
 
-Logs are written to both console and `webserver.log` (configurable).
+### Restarting the Panel
+If the panel itself is broken:
+```bash
+ssh vertebra@meduseld.io
+sudo systemctl restart icarus-panel
+```
 
-Log levels:
-- `INFO`: Normal operations
-- `WARNING`: Non-critical issues
-- `ERROR`: Errors that don't stop execution
-- `CRITICAL`: Fatal errors
+### Viewing Panel Logs
+```bash
+ssh vertebra@meduseld.io
+tail -f ~/services/meduseld/logs/webserver.log
+```
 
-## Thread Health
+### Restarting the SSH Terminal
+If the terminal isn't working:
+```bash
+ssh vertebra@meduseld.io
+sudo systemctl restart ttyd
+```
 
-The application monitors its background threads:
-- Monitor thread (server state detection)
-- Stats collection thread
-- Update check thread
+### Checking What's Running
+```bash
+ssh vertebra@meduseld.io
+sudo systemctl status icarus-panel
+sudo systemctl status ttyd
+sudo systemctl status cloudflared
+```
 
-Thread health is exposed via `/api/stats` endpoint.
-
-## Update Process
-
-On restart:
-1. Server is killed
-2. `updateserver.bat` is executed (runs SteamCMD)
-3. Update output is captured
-4. Build ID is updated on success
-5. Server is launched
-6. State is monitored until running
+### Manually Starting/Stopping Icarus
+If you need to bypass the panel:
+```bash
+ssh vertebra@meduseld.io
+cd ~/games/icarus
+./start.sh              # Start server
+pkill -9 IcarusServer   # Stop server
+```
 
 ## Troubleshooting
 
-### Server won't start
-- Check `webserver.log` for errors
-- Verify paths in `config.py`
-- Ensure executable exists and is accessible
+### "Server shows offline but I know it's running"
+The process name might have changed. Check:
+```bash
+ps aux | grep -i icarus
+```
+If the process name is different, update `PROCESS_NAME` in `app/config.py`.
 
-### Updates failing
-- Check update script exists
-- Review update output via `/api/update-output`
-- Verify SteamCMD is installed and working
+### "Graphs aren't showing data"
+The stats collection thread might have crashed. Restart the panel:
+```bash
+sudo systemctl restart icarus-panel
+```
 
-### Thread health warnings
-- Check `webserver.log` for thread errors
-- Restart the application if threads are dead
+### "SSH terminal shows blank page"
+1. Check if ttyd is running: `sudo systemctl status ttyd`
+2. Check if terminal.meduseld.io is in Cloudflare Access
+3. Restart ttyd: `sudo systemctl restart ttyd`
 
-### Game server dies when restarting the panel
-- This should NOT happen with the current implementation
-- The game server is launched as a detached process
-- If it still happens, check your service configuration
-- Ensure the service doesn't have "kill child processes" enabled
+### "Can't access the site at all"
+1. Check if Cloudflare Tunnel is running: `sudo systemctl status cloudflared`
+2. Check if your email is in the Access list
+3. Try incognito mode (clear cookies)
 
-## Process Isolation
+### "Changes I pushed aren't showing up"
+Did you restart the panel after pulling?
+```bash
+cd ~/services/meduseld
+git pull
+sudo systemctl restart icarus-panel
+```
 
-The game server is launched with `DETACHED_PROCESS` and `CREATE_NEW_PROCESS_GROUP` flags on Windows, which means:
-- The game server runs independently of the control panel
-- Restarting/stopping the panel does NOT affect the game server
-- You can deploy panel updates without downtime
-- The game server must be explicitly stopped via the panel or task manager
+## API for Nerds
 
-## License
+If you want to script things or integrate with other tools:
 
-MIT License - Feel free to modify and use for your own servers.
+### Control the Server
+```bash
+# Start
+curl -X POST https://panel.meduseld.io/start
+
+# Stop
+curl -X POST https://panel.meduseld.io/stop
+
+# Restart (with update check)
+curl -X POST https://panel.meduseld.io/restart
+
+# Force kill
+curl -X POST https://panel.meduseld.io/kill
+```
+
+### Get Stats
+```bash
+# Current stats
+curl https://panel.meduseld.io/api/stats | jq
+
+# Logs
+curl https://panel.meduseld.io/api/logs | jq
+
+# Historical data (30 min)
+curl https://panel.meduseld.io/api/history | jq
+
+# Check for updates
+curl https://panel.meduseld.io/api/check-update | jq
+```
+
+Example response from `/api/stats`:
+```json
+{
+  "state": "running",
+  "stats": {
+    "cpu": 15.2,
+    "ram_percent": 45.8,
+    "ram_used": 7.3,
+    "ram_total": 16.0,
+    "disk_percent": 31.2
+  },
+  "icarus": {
+    "cpu": 8.5,
+    "cpu_raw": 34.0,
+    "ram": 3.2
+  },
+  "uptime": 3600,
+  "health": "good"
+}
+```
+
+## Project Structure
+
+```
+meduseld/
+├── app/
+│   ├── webserver.py           # Main Flask app
+│   ├── config.py              # Settings
+│   ├── templates/
+│   │   ├── base.html          # Base template
+│   │   ├── panel.html         # Control panel
+│   │   └── terminal.html      # SSH wrapper
+│   └── static/
+│       ├── css/style.css      # Styles
+│       ├── js/main.js         # JavaScript
+│       └── *.png              # Images
+├── logs/                      # Log files
+├── requirements.txt           # Python packages
+├── README.md                  # This file
+└── CHANGELOG.md               # Version history
+```
+
+## Tech Stack
+
+- **Python 3.12** + Flask - The web app
+- **Bootstrap 5** - UI framework
+- **Chart.js** - Graphs
+- **ttyd** - Web terminal
+- **Cloudflare Tunnel** - Secure access without port forwarding
+- **Cloudflare Access** - Email authentication
+- **Ubuntu Server 24.04** - Where it all runs
+
+## Adding New People
+
+To give someone access:
+
+1. **Add their email to Cloudflare Access**:
+   - Go to Cloudflare Zero Trust dashboard
+   - Access → Applications → Meduseld
+   - Add their email to the policy
+
+2. **Add them to GitHub** (if they'll make changes):
+   - Repo → Settings → Collaborators
+   - Add their GitHub username
+
+3. **Tell them the URL**: https://panel.meduseld.io
+
+They'll get an OTP code via email to login.
+
+## Questions?
+
+Ask in the group chat or check the code - it's pretty straightforward. Most of the logic is in `app/webserver.py`.
+
+## Version
+
+Current version: **0.1.0-alpha** (see CHANGELOG.md for details)
+
+This is an alpha release - we're still testing everything!
