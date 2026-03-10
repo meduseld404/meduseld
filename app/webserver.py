@@ -273,6 +273,46 @@ def validate_host():
 
     abort(403)
 
+@app.before_request
+def load_user():
+    """Load user authentication - dev mode uses fake Discord user"""
+    
+    # Development mode: Use hardcoded Discord user
+    if IS_DEV:
+        g.user = "dev@meduseld.io"
+        g.discord_user = {
+            "id": "123456789012345678",
+            "username": "DevUser",
+            "discriminator": "0001",
+            "email": "dev@meduseld.io",
+            "verified": True,
+            "global_name": "Development User",
+            "avatar": None,
+            "guilds": ["924788704529252353"],  # Your Discord server ID
+            "roles": {
+                "roles:924788704529252353": ["1234567890", "0987654321"]
+            }
+        }
+        logger.debug(f"Dev mode: Using fake Discord user: {g.discord_user['username']}")
+        return
+    
+    # Production: Check Cloudflare Access header
+    email = request.headers.get("Cf-Access-Authenticated-User-Email")
+    
+    if email:
+        g.user = email
+        # TODO: Fetch full Discord user data from database/session
+        # For now, just store basic info from email
+        g.discord_user = {
+            "email": email,
+            "username": email.split('@')[0],
+            "verified": True
+        }
+        logger.debug(f"Authenticated user: {email}")
+    else:
+        g.user = None
+        g.discord_user = None
+
 # ================= SERVER CONTROL =================
 
 def is_running():
@@ -801,6 +841,48 @@ def jellyfin_proxy(path=""):
     except Exception as e:
         logger.error(f"Error proxying to Jellyfin: {e}")
         return f"Jellyfin unavailable: {e}", 503
+
+# ================= AUTH ENDPOINTS =================
+
+@app.route('/api/auth/profile', methods=['OPTIONS', 'GET'])
+def get_profile():
+    """Get authenticated user profile with Discord data"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    if hasattr(g, 'user') and g.user:
+        return jsonify({
+            'authenticated': True,
+            'user': g.discord_user if hasattr(g, 'discord_user') and g.discord_user else {
+                'email': g.user,
+                'username': g.user.split('@')[0]
+            }
+        })
+    else:
+        return jsonify({
+            'authenticated': False
+        })
+
+@app.route('/me', methods=['OPTIONS', 'GET'])
+def auth_me():
+    """Auth endpoint for checking authentication status"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    if hasattr(g, 'user') and g.user:
+        return jsonify({
+            'authenticated': True,
+            'user': g.discord_user if hasattr(g, 'discord_user') and g.discord_user else {
+                'email': g.user,
+                'username': g.user.split('@')[0]
+            }
+        })
+    else:
+        return jsonify({
+            'authenticated': False
+        })
+
+# ================= ROUTES =================
 
 @app.route("/", methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
 def home():
