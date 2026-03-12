@@ -105,7 +105,8 @@ OIDC_WORKER_URL = os.environ.get("OIDC_WORKER_URL", "https://discord-oidc.404-41
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "282219108850-al0ddv2us3ovig0lg18lhae7m7ocemev.apps.googleusercontent.com")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "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h")
 GOOGLE_REDIRECT_URI = "https://meduseld.io/oauth2callback"
-GOOGLE_DRIVE_FOLDER_ID = os.environ.get("GOOGLE_DRIVE_FOLDER_ID", "")  # Set this to your Drive folder ID
+GOOGLE_DRIVE_PARENT_FOLDER_ID = "10Q0jIUL64QG8jitw4INtTjE7oHH-aBeQ"  # Main backup folder
+GOOGLE_DRIVE_GAME_FOLDER_NAME = "icarus"  # Subfolder name for this game
 GOOGLE_TOKEN_FILE = os.path.join(os.path.dirname(__file__), "google_token.json")
 
 # ================= DEVELOPMENT MODE SETUP =================

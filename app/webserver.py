@@ -1831,18 +1831,37 @@ def upload_to_drive():
         # Build Drive API service
         service = build('drive', 'v3', credentials=credentials)
         
+        # Find or create the game subfolder
+        game_folder_id = None
+        
+        # Search for existing "icarus" folder
+        query = f"name='{GOOGLE_DRIVE_GAME_FOLDER_NAME}' and '{GOOGLE_DRIVE_PARENT_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        results = service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+        folders = results.get('files', [])
+        
+        if folders:
+            game_folder_id = folders[0]['id']
+            logger.info(f"Found existing '{GOOGLE_DRIVE_GAME_FOLDER_NAME}' folder: {game_folder_id}")
+        else:
+            # Create the subfolder
+            folder_metadata = {
+                'name': GOOGLE_DRIVE_GAME_FOLDER_NAME,
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [GOOGLE_DRIVE_PARENT_FOLDER_ID]
+            }
+            folder = service.files().create(body=folder_metadata, fields='id').execute()
+            game_folder_id = folder.get('id')
+            logger.info(f"Created '{GOOGLE_DRIVE_GAME_FOLDER_NAME}' folder: {game_folder_id}")
+        
         # Prepare file metadata
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         file_name = f"Expedition_404_backup_{timestamp}.json"
         
         file_metadata = {
             'name': file_name,
-            'mimeType': 'application/json'
+            'mimeType': 'application/json',
+            'parents': [game_folder_id]
         }
-        
-        # Add to specific folder if configured
-        if GOOGLE_DRIVE_FOLDER_ID:
-            file_metadata['parents'] = [GOOGLE_DRIVE_FOLDER_ID]
         
         # Upload file
         media = MediaFileUpload(backup_file, mimetype='application/json', resumable=True)
@@ -1872,6 +1891,7 @@ def upload_to_drive():
             <div class="success">✓ Backup Uploaded Successfully!</div>
             <div class="details">
                 <p><strong>File:</strong> {file.get('name')}</p>
+                <p><strong>Location:</strong> {GOOGLE_DRIVE_GAME_FOLDER_NAME} folder</p>
                 <p><a href="{file.get('webViewLink')}" target="_blank">View in Google Drive</a></p>
             </div>
             <a href="/">← Back to Control Panel</a>
