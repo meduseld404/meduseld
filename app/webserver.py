@@ -77,7 +77,7 @@ except ImportError as e:
     CRITICAL_RAM = 90
     CRITICAL_DISK = 95
     LOG_FILE_PATH = "webserver.log"
-    SERVER_LOG_FILE_PATH = "webserver.log"
+    SYSTEM_LOG_FILE_PATH = "webserver.log"
     LOG_LEVEL = "INFO"
     FLASK_HOST = "0.0.0.0"
     FLASK_PORT = 5000
@@ -1965,11 +1965,11 @@ def api_server_logs():
         lines = int(request.args.get('lines', 50))
         lines = min(lines, 200)  # Cap at 200 lines
 
-        if not os.path.exists(SERVER_LOG_FILE_PATH):
+        if not os.path.exists(SYSTEM_LOG_FILE_PATH):
             return jsonify({"logs": [], "error": "Log file not found"})
 
         # Read last N lines from log file
-        with open(SERVER_LOG_FILE_PATH, 'r') as f:
+        with open(SYSTEM_LOG_FILE_PATH, 'r') as f:
             all_lines = f.readlines()
             recent_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
 
