@@ -1,116 +1,39 @@
-# Meduseld - Game Server Control Panel
+# Meduseld - 404 Crew Dedicated Server Control Webapp
 
 <div align="center">
   <img src="app/static/meduseldminimal.png" alt="Meduseld" width="150">
 </div>
 
-Meduseld is a web-based control panel that lets you manage your Icarus dedicated game server from anywhere. No technical knowledge required - just click buttons in your browser to start, stop, and monitor your server.
+Hey! This is our web control panel for the Icarus game server. You can start/stop the server, check if it's running, view logs, and even SSH into the server - all from your browser.
 
-## What is Meduseld?
+## What You Can Do
 
-Think of Meduseld as a remote control for your game server. Instead of logging into the server computer and typing commands, you can:
+### Control Panel (https://panel.meduseld.io)
 
-- Start and stop your Icarus server with one click
-- See if the server is online or offline
-- Check how many players are connected
-- View server performance (CPU, memory, disk space)
-- Read server logs to troubleshoot issues
-- Update the server when new versions are available
+- **Start/Stop/Restart** the Icarus server
+- **Monitor** CPU, RAM, disk usage in real-time
+- **View live logs** from the game server
+- **Check for updates** - it'll tell you if there's a new version
+- **See graphs** of server performance over the last 30 minutes
+- **Force kill** if the server gets stuck
 
-Everything happens through a simple website - no apps to install, no complicated setup.
+### SSH Terminal (https://ssh.meduseld.io)
 
-## Features
+- **Access the server** directly from your browser
+- No need to install PuTTY or any SSH client
+- Login with your Ubuntu username and password
+- Full terminal access - run any command you want
 
-### Game Server Control
+## How to Access
 
-- Start, stop, or restart your Icarus server instantly
-- See real-time status - is the server online or offline?
-- View how many players are currently connected
-- Check for game updates and apply them with one click
-- Emergency "force stop" if the server gets stuck
+1. Go to https://services.meduseld.io to see all available services
+2. Click on the service you want to access (Control Panel, SSH Terminal, Jellyfin)
+3. Authenticate with Discord via Cloudflare Access
+4. You're in!
 
-### Server Monitoring
+Your Discord account needs to be in the allowed server. If you can't get in, ask Kyle to add you.
 
-- Live graphs showing CPU, memory, and disk usage
-- Performance history for the last 30 minutes
-- Health indicators that warn you if something's wrong
-- Activity log showing recent server events
-
-### Server Logs
-
-- Read game server logs directly in your browser
-- See what's happening without technical knowledge
-- Troubleshoot issues or check player activity
-- Logs update automatically as new events occur
-
-### Web Terminal (Advanced Users)
-
-- Access the server computer directly from your browser
-- No need to install special software
-- Full command-line access for advanced troubleshooting
-
-## How to Use Meduseld
-
-1. **Visit the main page**: Go to https://meduseld.io
-2. **Navigate to services**: Click the button to access the service menu
-3. **Choose what you need**: Select the Game Server Panel, SSH Terminal, or other services
-4. **Log in with Discord**: Authenticate using your Discord account
-5. **Control your server**: Use the buttons and controls to manage your game server
-
-You'll need to be authorized to access Meduseld. If you can't log in, contact the server administrator to add your Discord account to the access list.
-
-## Understanding Server Status
-
-The control panel shows your server in different states:
-
-- **Offline** - Server is not running. Click "Start" to launch it.
-- **Starting** - Server is booting up. Wait a minute for it to fully start.
-- **Running** - Server is online and ready for players to join.
-- **Stopping** - Server is shutting down gracefully.
-- **Restarting** - Server is restarting (usually to apply updates).
-- **Crashed** - Server stopped unexpectedly. Check logs or restart it.
-
-The panel automatically detects these states and updates the display every few seconds.
-
-## Common Questions
-
-### How do I start the server?
-
-Click the green "Start Server" button on the control panel. Wait about 30-60 seconds for it to fully start.
-
-### How do I know if players can connect?
-
-When the status shows "Running" and turns green, players can join. The panel also shows the current player count.
-
-### What if the server is stuck or frozen?
-
-Use the "Force Stop" button to immediately kill the server process, then start it again.
-
-### How do I update the game server?
-
-Click "Check for Updates" to see if a new version is available. If there is, click "Restart" to apply the update automatically.
-
-### Can I see what's happening on the server?
-
-Yes! Click the "Logs" tab to see real-time server activity, including player connections and game events.
-
-### What do the graphs mean?
-
-- **CPU**: How much processing power the server is using
-- **Memory**: How much RAM the server is using
-- **Disk**: How much storage space is being used
-
-If any of these get too high (near 100%), the server might slow down or crash.
-
-## Contributors
-
-This project is maintained by:
-
-- [Add contributor names here]
-
-Want to contribute? Check out the development section below or contact the project maintainers.
-
-## For Developers
+## Making Changes to the Code
 
 If you want to modify the panel or fix something:
 
@@ -446,14 +369,10 @@ They'll get an OTP code via email to login.
 
 ## Questions?
 
-Contact the server administrator or project maintainers if you need help or have questions about using Meduseld.
+Ask in the group chat or check the code - it's pretty straightforward. Most of the logic is in `app/webserver.py`.
 
 ## Version
 
-Current version: **0.3.0-alpha**
+Current version: **0.3.0-alpha** (see CHANGELOG.md for details)
 
-This is an alpha release - features are still being tested and improved. Report any issues to the project maintainers.
-
----
-
-For technical documentation, deployment information, and API details, see the developer sections above.
+This is an alpha release - we're still testing everything!
