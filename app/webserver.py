@@ -76,7 +76,7 @@ except ImportError as e:
     CRITICAL_CPU = 95
     CRITICAL_RAM = 90
     CRITICAL_DISK = 95
-    LOG_FILE_PATH = "webserver.log"
+    LOG_FILE_PATH = "/var/log/syslog"
     LOG_LEVEL = "INFO"
     FLASK_HOST = "0.0.0.0"
     FLASK_PORT = 5000
