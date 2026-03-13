@@ -84,7 +84,7 @@ All notable changes to the Meduseld Server Control Panel project.
 
 #### New Services
 
-- **Menu Page** (menu.meduseld.io): Central hub for all services with status indicators
+- **Menu Page** (services.meduseld.io): Central hub for all services with status indicators
 - **Health Monitoring** (health.meduseld.io): Dedicated health check system with Cloudflare Worker
 - **Jellyfin Integration** (jellyfin.meduseld.io): Media streaming proxy through Flask app
 - **User Profiles**: Discord-based user profile system with authentication state

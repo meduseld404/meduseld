@@ -32,7 +32,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 # Add CORS headers for API endpoints
 @app.after_request
 def add_cors_headers(response):
-    # Allow system.meduseld.io and menu.meduseld.io to access API
+    # Allow system.meduseld.io and services.meduseld.io to access API
     origin = request.headers.get('Origin')
     if origin and 'meduseld.io' in origin:
         response.headers['Access-Control-Allow-Origin'] = origin
@@ -135,7 +135,7 @@ ALLOWED_HOSTS = [
     "127.0.0.1",
     "192.168.1.175",
     "meduseld.io",
-    "menu.meduseld.io",
+    "services.meduseld.io",
     "panel.meduseld.io",
     "ssh.meduseld.io",
     "terminal.meduseld.io",

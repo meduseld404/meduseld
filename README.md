@@ -26,7 +26,7 @@ Hey! This is our web control panel for the Icarus game server. You can start/sto
 
 ## How to Access
 
-1. Go to https://menu.meduseld.io to see all available services
+1. Go to https://services.meduseld.io to see all available services
 2. Click on the service you want to access (Control Panel, SSH Terminal, Jellyfin)
 3. Authenticate with Discord via Cloudflare Access
 4. You're in!
