@@ -1919,6 +1919,7 @@ def google_oauth():
         )
 
         session["oauth_state"] = state
+        session["code_verifier"] = flow.code_verifier
         return redirect(authorization_url)
     except Exception as e:
         logger.error(f"Error starting OAuth flow: {e}")
@@ -1946,7 +1947,10 @@ def oauth2callback():
         )
 
         flow.redirect_uri = GOOGLE_REDIRECT_URI
-        flow.fetch_token(authorization_response=request.url)
+        flow.fetch_token(
+            authorization_response=request.url,
+            code_verifier=session.get("code_verifier"),
+        )
 
         credentials = flow.credentials
         save_google_credentials(credentials)
