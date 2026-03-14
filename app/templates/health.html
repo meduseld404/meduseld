@@ -69,17 +69,17 @@ async function checkService(service, statusEl, detailsEl) {
     const data = await resp.json();
     
     if (data.status === 'up') {
-      statusEl.innerHTML = '<i class="cil-check-circle" style="font-size: 3rem; color: #28a745;"></i><br><strong class="text-success">Online</strong>';
+      statusEl.innerHTML = '<i class="bi bi-check-circle-fill" style="font-size: 3rem; color: #28a745;"></i><br><strong class="text-success">Online</strong>';
       detailsEl.innerHTML = `<small class="text-muted">${data.response_time_ms}ms</small>`;
     } else if (data.status === 'degraded') {
-      statusEl.innerHTML = '<i class="cil-warning" style="font-size: 3rem; color: #ffc107;"></i><br><strong class="text-warning">Degraded</strong>';
+      statusEl.innerHTML = '<i class="bi bi-exclamation-triangle-fill" style="font-size: 3rem; color: #ffc107;"></i><br><strong class="text-warning">Degraded</strong>';
       detailsEl.innerHTML = `<small class="text-warning">Status: ${data.status_code}</small>`;
     } else {
-      statusEl.innerHTML = '<i class="cil-x-circle" style="font-size: 3rem; color: #dc3545;"></i><br><strong class="text-danger">Down</strong>';
+      statusEl.innerHTML = '<i class="bi bi-x-circle-fill" style="font-size: 3rem; color: #dc3545;"></i><br><strong class="text-danger">Down</strong>';
       detailsEl.innerHTML = `<small class="text-danger">${data.error || 'Service unavailable'}</small>`;
     }
   } catch (err) {
-    statusEl.innerHTML = '<i class="cil-x-circle" style="font-size: 3rem; color: #dc3545;"></i><br><strong class="text-danger">Error</strong>';
+    statusEl.innerHTML = '<i class="bi bi-x-circle-fill" style="font-size: 3rem; color: #dc3545;"></i><br><strong class="text-danger">Error</strong>';
     detailsEl.innerHTML = `<small class="text-danger">Failed to check status</small>`;
   }
 }

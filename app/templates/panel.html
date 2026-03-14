@@ -4,21 +4,21 @@
   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
     <div class="d-flex align-items-center gap-2">
       <a href="https://services.meduseld.io" class="btn btn-warning btn-sm">
-        <i class="cil-arrow-left"></i> Back to Services
+        <i class="bi bi-arrow-left"></i> Back to Services
       </a>
     </div>
     <div class="d-flex align-items-center gap-2 flex-wrap">
       <a href="https://ssh.meduseld.io" class="btn btn-dark btn-sm">
-        <i class="cil-terminal"></i> SSH Terminal
+        <i class="bi bi-terminal"></i> SSH Terminal
       </a>
       <a href="https://trivia.meduseld.io" class="btn btn-dark btn-sm">
-        <i class="cil-help-circle"></i> Trivia Game
+        <i class="bi bi-question-circle"></i> Trivia Game
       </a>
       <a href="/download-backup" class="btn btn-success btn-sm" download>
-        <i class="cil-cloud-download"></i> Download Backup
+        <i class="bi bi-cloud-download"></i> Download Backup
       </a>
       <a href="/backup-to-cloud" class="btn btn-primary btn-sm">
-        <i class="cil-cloud-upload"></i> Backup Save to Cloud
+        <i class="bi bi-cloud-upload"></i> Backup Save to Cloud
       </a>
     </div>
   </div>
@@ -39,7 +39,7 @@
     class="badge text-dark px-3 py-2"
     style="font-size: 0.85rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: 2px solid #5a67d8; display: {% if dev_mode %}inline-block{% else %}none{% endif %};"
   >
-    <i class="cil-terminal"></i> DEVELOPMENT MODE
+    <i class="bi bi-terminal"></i> DEVELOPMENT MODE
   </span>
 </div>
 <div class="container-fluid py-4">
@@ -145,7 +145,7 @@
             id="start-card"
           >
             <div class="card-body d-flex flex-column justify-content-center align-items-center">
-              <i class="cil-media-play fs-3 mb-2"></i>
+              <i class="bi bi-play-fill fs-3 mb-2"></i>
               <strong>Start</strong>
             </div>
           </div>
@@ -154,7 +154,7 @@
         <div class="col-6">
           <div class="card text-center h-100 control-card" onclick="action('/stop')" id="stop-card">
             <div class="card-body d-flex flex-column justify-content-center align-items-center">
-              <i class="cil-media-stop fs-3 mb-2"></i>
+              <i class="bi bi-stop-fill fs-3 mb-2"></i>
               <strong>Stop</strong>
             </div>
           </div>
@@ -167,7 +167,7 @@
             id="restart-card"
           >
             <div class="card-body d-flex flex-column justify-content-center align-items-center">
-              <i class="cil-loop-circular fs-3 mb-2"></i>
+              <i class="bi bi-arrow-repeat fs-3 mb-2"></i>
               <strong>Restart</strong>
             </div>
           </div>
@@ -176,7 +176,7 @@
         <div class="col-6">
           <div class="card text-center h-100 control-card" onclick="action('/kill')" id="kill-card">
             <div class="card-body d-flex flex-column justify-content-center align-items-center">
-              <i class="cil-x fs-3 mb-2"></i>
+              <i class="bi bi-x-lg fs-3 mb-2"></i>
               <strong>Kill</strong>
             </div>
           </div>
@@ -211,7 +211,7 @@
           onclick="clearStartupLogs()"
           title="Archive and clear startup logs"
         >
-          <i class="cil-trash"></i> Clear Logs
+          <i class="bi bi-trash"></i> Clear Logs
         </button>
       </div>
       <div
@@ -356,17 +356,17 @@
         if (data.health === 'good') {
           healthBadge.innerHTML = `
       <span class="badge rounded-pill px-3 py-2 bg-success" title="System resources are within normal limits">
-        <i class="cil-check-circle"></i> Health: <span style="color: #5cb85c; font-weight: bold;">Good</span>
+        <i class="bi bi-check-circle-fill"></i> Health: <span style="color: #5cb85c; font-weight: bold;">Good</span>
       </span>`;
         } else if (data.health === 'warning') {
           healthBadge.innerHTML = `
       <span class="badge rounded-pill px-3 py-2 bg-warning text-dark" title="CPU, RAM, or disk usage is approaching limits (80%+)">
-        <i class="cil-warning"></i> Health: <span style="color: #ff9800; font-weight: bold;">Warning</span>
+        <i class="bi bi-exclamation-triangle-fill"></i> Health: <span style="color: #ff9800; font-weight: bold;">Warning</span>
       </span>`;
         } else {
           healthBadge.innerHTML = `
       <span class="badge rounded-pill px-3 py-2 bg-danger" title="CPU, RAM, or disk usage is critically high (95%+)">
-        <i class="cil-x-circle"></i> Health: <span style="color: #ff4444; font-weight: bold;">Critical</span>
+        <i class="bi bi-x-circle-fill"></i> Health: <span style="color: #ff4444; font-weight: bold;">Critical</span>
       </span>`;
         }
       }
@@ -388,13 +388,13 @@
           isUpdating = true;
           updateBadge.innerHTML = `
       <span class="badge rounded-pill px-3 py-2 text-white" style="background-color: #7a6516;" title="Update in progress...">
-        <i class="cil-reload" style="animation: spin 1s linear infinite;"></i> Updating...
+        <i class="bi bi-arrow-clockwise" style="animation: spin 1s linear infinite;"></i> Updating...
       </span>`;
         } else if (data.version.update_available) {
           const updateTooltip = `Current Build: ${data.version.current || 'Unknown'} | Latest Build: ${data.version.latest || 'Unknown'}${gameVersion ? ' | ' + gameVersion : ''} | Click to update and restart`;
           updateBadge.innerHTML = `
       <span class="badge rounded-pill px-3 py-2 text-white" style="background-color: #4a90e2; cursor: pointer;" title="${updateTooltip}" onclick="startUpdate()">
-        <i class="cil-cloud-download"></i> Update Available (Click to Update)
+        <i class="bi bi-cloud-download"></i> Update Available (Click to Update)
       </span>`;
           previousUpdateAvailable = true;
         } else if (data.version.current && data.version.latest) {
@@ -405,7 +405,7 @@
           }
           updateBadge.innerHTML = `
       <span class="badge rounded-pill px-3 py-2 text-white" style="background-color: #1f4d2b;" title="${tooltipParts || 'Up to date'}">
-        <i class="cil-check"></i> Up to Date
+        <i class="bi bi-check-lg"></i> Up to Date
       </span>`;
         } else {
           updateBadge.innerHTML = '';
@@ -524,7 +524,7 @@
     if (updateBadge) {
       updateBadge.innerHTML = `
       <span class="badge rounded-pill px-3 py-2 text-white" style="background-color: #7a6516;" title="Update in progress...">
-        <i class="cil-reload" style="animation: spin 1s linear infinite;"></i> Updating...
+        <i class="bi bi-arrow-clockwise" style="animation: spin 1s linear infinite;"></i> Updating...
       </span>`;
     }
 
