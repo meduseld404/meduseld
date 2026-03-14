@@ -1,5 +1,6 @@
 ---
 inclusion: auto
+description: Enforces Conventional Commits format for all commit messages
 ---
 
 # Commit Message Guidelines

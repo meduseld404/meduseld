@@ -1,5 +1,6 @@
 ---
 inclusion: always
+description: Prevents auto-generation of documentation files and deployment scripts unless explicitly requested
 ---
 
 # Documentation Policy
@@ -7,6 +8,7 @@ inclusion: always
 CRITICAL RULE: Do NOT create documentation files (.md) or deployment scripts (.sh, .bash) unless explicitly requested by the user.
 
 This includes:
+
 - README files
 - QUICKSTART guides
 - SUMMARY documents
@@ -16,6 +18,7 @@ This includes:
 - Any other .md files
 
 Focus only on:
+
 - Actual code implementation
 - Configuration files
 - Source code files

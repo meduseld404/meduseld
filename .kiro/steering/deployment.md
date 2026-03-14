@@ -1,3 +1,7 @@
+---
+description: Server infrastructure, systemd service, domains, API endpoints, and environment variables for the Meduseld project
+---
+
 # Meduseld Deployment Information
 
 ## Production Environment
@@ -69,11 +73,11 @@ Cloudflare Worker for Discord OAuth authentication
 ## Server Setup
 
 - **Host**: Linux server (production)
-- **Python**: Flask application running directly on the system
-- **Process Manager**: [TO BE DOCUMENTED - systemd/supervisor/manual?]
+- **Python**: Flask application running via virtualenv
+- **Process Manager**: systemd
 - **Port**: 5000 (production) / 5001 (dev)
 - **User**: vertebra
-- **App Directory**: `/srv/meduseld`
+- **App Directory**: `/srv/apps/meduseld`
 
 ### Application Structure
 
@@ -133,27 +137,48 @@ Cloudflare Worker for Discord OAuth authentication
 
 ### How It Starts
 
-[TO BE DOCUMENTED]
+Managed by systemd. Service file: `/etc/systemd/system/meduseld.service`
 
-- Is there a systemd service file?
-- Is it run via supervisor or another process manager?
-- What's the exact command used to start it?
-- Does it auto-restart on failure?
+```ini
+[Unit]
+Description=Meduseld Control Panel
+After=network.target
+
+[Service]
+User=vertebra
+WorkingDirectory=/srv/apps/meduseld
+Environment="JWT_SECRET=<redacted>"
+Environment="MEDUSELD_ENV=production"
+Environment="FLASK_SECRET_KEY=<redacted>"
+Environment="GOOGLE_CLIENT_SECRET=<set from Google Cloud Console>"
+ExecStart=/srv/apps/meduseld/venv/bin/python /srv/apps/meduseld/app/webserver.py
+Restart=always
+KillMode=process
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
+```
+
+- Auto-restarts on failure (`Restart=always`)
+- Uses virtualenv Python at `/srv/apps/meduseld/venv/bin/python`
+- Manage with: `sudo systemctl start|stop|restart|status meduseld`
+- After config changes: `sudo systemctl daemon-reload && sudo systemctl restart meduseld`
 
 ### Deployment Process
 
 The webhook at `/webhook/deploy.sh` references Docker commands, but these are NOT used in production.
 
-Actual deployment process: [TO BE DOCUMENTED]
+Actual deployment: push to main, then on the server pull and restart the service.
 
 ### Common Issues
 
 When the server "goes offline" after pressing start:
 
-1. Check actual logs on production server: `tail -100 /srv/meduseld/logs/webserver.log`
+1. Check actual logs on production server: `tail -100 /srv/apps/meduseld/logs/webserver.log`
 2. Check if process is running: `ps aux | grep webserver.py`
-3. Check systemd status (if applicable): `systemctl status meduseld`
-4. Run manually to see errors: `cd /srv/meduseld && python3 app/webserver.py`
+3. Check systemd status: `systemctl status meduseld`
+4. Run manually to see errors: `cd /srv/apps/meduseld && venv/bin/python app/webserver.py`
 
 ## API Endpoints (panel.meduseld.io)
 
@@ -183,5 +208,8 @@ When the server "goes offline" after pressing start:
 ## Environment Variables
 
 - `MEDUSELD_ENV`: Set to "production" in production (defaults to "production")
-- `FLASK_SECRET_KEY`: Should be set in production
+- `FLASK_SECRET_KEY`: Session encryption key (set in systemd service)
+- `JWT_SECRET`: JWT signing key for Discord OIDC auth (set in systemd service)
+- `GOOGLE_CLIENT_SECRET`: Google OAuth client secret for Drive backup (set in systemd service)
+- `GOOGLE_CLIENT_ID`: Google OAuth client ID (hardcoded fallback in config.py)
 - `OIDC_WORKER_URL`: Discord OIDC worker URL
