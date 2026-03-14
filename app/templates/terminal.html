@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SSH Terminal | Meduseld</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+
+      .navbar-custom {
+        background: rgba(0, 0, 0, 0.9);
+        border-bottom: 2px solid #c9a227;
+        padding: 10px 20px;
+        flex-shrink: 0;
+      }
+
+      .terminal-frame {
+        flex: 1;
+        border: none;
+        width: 100%;
+        height: 100%;
+      }
+
+      @media (max-width: 768px) {
+        .navbar-custom {
+          padding: 8px 12px;
+        }
+
+        .navbar-custom .d-flex {
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .navbar-custom .text-white {
+          font-size: 0.9rem;
+          width: 100%;
+          margin-bottom: 4px;
+        }
+
+        .navbar-custom > .d-flex > div:last-child {
+          width: 100%;
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
+        }
+
+        .navbar-custom .btn-sm {
+          font-size: 0.8rem;
+          padding: 4px 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="navbar-custom">
+      <div class="d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+          <a href="https://services.meduseld.io" class="btn btn-warning btn-sm">
+            <i class="bi bi-arrow-left"></i> Back to Services
+          </a>
+
+          <a href="https://panel.meduseld.io" class="btn btn-warning btn-sm">
+            <i class="bi bi-controller"></i> Server Panel
+          </a>
+        </div>
+
+        <div class="text-white"><strong>SSH Terminal</strong> | Meduseld Server</div>
+      </div>
+    </div>
+
+    <iframe src="https://terminal.meduseld.io" class="terminal-frame" id="terminal"></iframe>
+
+    <!-- Help Button -->
+    <button
+      id="help-button"
+      class="btn btn-warning position-fixed"
+      style="
+        bottom: 20px;
+        right: 20px;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        box-shadow: 0 4px 12px rgba(230, 198, 92, 0.4);
+        z-index: 1000;
+      "
+      data-bs-toggle="modal"
+      data-bs-target="#helpModal"
+      title="Linux Commands Help"
+    >
+      <i class="bi bi-question-circle" style="font-size: 1.8rem"></i>
+    </button>
+
+    <!-- Help Modal -->
+    <div
+      class="modal fade"
+      id="helpModal"
+      tabindex="-1"
+      aria-labelledby="helpModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+        <div class="modal-content bg-dark text-light border-warning">
+          <div class="modal-header" style="border-bottom: 2px solid #e6c65c">
+            <h5 class="modal-title" id="helpModalLabel" style="color: #e6c65c">
+              <i class="bi bi-terminal me-2"></i>
+              Linux Commands Cheat Sheet
+            </h5>
+            <button
+              type="button"
+              class="btn-close btn-close-white"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-light mb-4" style="opacity: 0.85;">
+              Quick reference for managing the game server directory at
+              <code>/srv/games/icarus</code>
+            </p>
+
+            <div class="mb-4">
+              <h6 class="text-warning mb-3">
+                <i class="bi bi-folder me-2"></i>
+                Navigation
+              </h6>
+              <div class="command-item mb-2">
+                <code class="text-info">cd /srv/games/icarus</code>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Navigate to the Icarus dedicated server root directory where all game files, configs, and saves are stored.</p>
+              </div>
+              <div class="command-item mb-2">
+                <code class="text-info">ls -lah</code>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">List all files and folders including hidden ones, with permissions, owner, size in human-readable format, and modification dates.</p>
+              </div>
+              <div class="command-item mb-2">
+                <code class="text-info">pwd</code>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Print the full path of your current working directory. Useful when you're not sure where you are in the filesystem.</p>
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <h6 class="text-warning mb-3">
+                <i class="bi bi-file-earmark me-2"></i>
+                File Operations
+              </h6>
+              <div class="command-item mb-2">
+                <code class="text-info">cat filename.txt</code>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Print the entire contents of a file to the terminal. Best for small files — for large files use <code class="text-info">less</code> instead.</p>
+              </div>
+              <div class="command-item mb-2">
+                <code class="text-info">tail -f logfile.log</code>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Follow a log file in real-time, showing new lines as they're written. Great for watching server output live. Press Ctrl+C to stop.</p>
+              </div>
+              <div class="command-item mb-2">
+                <code class="text-info">grep "error" logfile.log</code>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Search a file for lines containing the given text. Case-sensitive by default — add <code class="text-info">-i</code> for case-insensitive search.</p>
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <h6 class="text-warning mb-3">
+                <i class="bi bi-device-hdd me-2"></i>
+                Disk Usage
+              </h6>
+              <div class="command-item mb-2">
+                <code class="text-info">du -sh *</code>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Show the total size of each file and folder in the current directory. Helpful for finding what's eating up disk space.</p>
+              </div>
+              <div class="command-item mb-2">
+                <code class="text-info">df -h</code>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Show how much disk space is used and available on each mounted filesystem. Check this if the server is running low on storage.</p>
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <h6 class="text-warning mb-3">
+                <i class="bi bi-cpu me-2"></i>
+                Process Management
+              </h6>
+              <div class="command-item mb-2">
+                <code class="text-info">ps aux | grep icarus</code>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">List all running processes and filter for Icarus-related ones. Shows PID, CPU/memory usage, and the full command. Use the PID with <code class="text-info">kill</code> if needed.</p>
+              </div>
+              <div class="command-item mb-2">
+                <code class="text-info">top</code>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Live view of system resource usage — CPU, memory, and running processes sorted by activity. Press <code class="text-info">q</code> to quit, <code class="text-info">M</code> to sort by memory.</p>
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <h6 class="text-warning mb-3">
+                <i class="bi bi-shield-check me-2"></i>
+                Permissions
+              </h6>
+              <div class="command-item mb-2">
+                <code class="text-info">ls -l</code>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">List files with their permission flags (e.g. <code class="text-info">rwxr-xr-x</code>), owner, group, and size. The first column shows read/write/execute for owner, group, and others.</p>
+              </div>
+              <div class="command-item mb-2">
+                <code class="text-info">chmod +x script.sh</code>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Add execute permission to a script so it can be run directly with <code class="text-info">./script.sh</code>. Without this, you'd get a "Permission denied" error.</p>
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <h6 class="text-warning mb-3">
+                <i class="bi bi-gear me-2"></i>
+                Server Configuration
+              </h6>
+              <div class="command-item mb-2">
+                <code class="text-info">
+                  nano Icarus/Saved/Config/WindowsServer/ServerSettings.ini
+                </code>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Open the server config file in the nano text editor. Change game settings like difficulty, max players, and session name. Press Ctrl+O to save, Ctrl+X to exit.</p>
+              </div>
+              <div class="command-item mb-2">
+                <code class="text-info">nano start.sh</code>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Edit the server startup script that controls how the game server launches, including Wine/Proton settings and launch arguments.</p>
+              </div>
+              <div
+                class="mt-3 p-3"
+                style="background-color: rgba(230, 198, 92, 0.1); border-radius: 5px"
+              >
+                <p class="mb-2"><strong>About start.sh:</strong></p>
+                <ul class="text-light mb-0" style="font-size: 0.9rem; opacity: 0.85;">
+                  <li>Launches Icarus server using Wine/Proton compatibility layer</li>
+                  <li>Manages tmux session for background server operation</li>
+                  <li>Checks for existing server processes to prevent duplicates</li>
+                  <li>Logs startup information for troubleshooting</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="alert alert-warning" role="alert">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              <strong>Caution:</strong>
+              Be careful with commands that modify or delete files. Always double-check before
+              running destructive operations.
+            </div>
+          </div>
+          <div class="modal-footer" style="border-top: 1px solid rgba(230, 198, 92, 0.2)">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      .command-item code {
+        background-color: rgba(230, 198, 92, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+        display: inline-block;
+        font-size: 0.9rem;
+      }
+      .modal-body::-webkit-scrollbar {
+        width: 8px;
+      }
+      .modal-body::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.2);
+      }
+      .modal-body::-webkit-scrollbar-thumb {
+        background: #e6c65c;
+        border-radius: 4px;
+      }
+      .modal-body::-webkit-scrollbar-thumb:hover {
+        background: #d4b34a;
+      }
+      #help-button {
+        transition: all 0.3s ease;
+      }
+      #help-button:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 20px rgba(230, 198, 92, 0.6);
+      }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

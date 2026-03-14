@@ -254,3 +254,61 @@ After any action: polling increases to 1-second intervals for 30 seconds, then r
 
 - Top logo → links to YouTube video `7lwJOxN_gXc` (Rohan theme)
 - Bottom logo → links to YouTube video `WtO3AHMBePY`
+
+---
+
+## ssh.meduseld.io — SSH Terminal Wrapper
+
+File: `meduseld/app/templates/terminal.html`
+
+Wrapper page that embeds the ttyd web terminal in an iframe with a navigation bar and help modal.
+
+### Navigation Bar
+
+- "Back to Services" button → navigates to `https://services.meduseld.io`
+- "Server Panel" button → navigates to `https://panel.meduseld.io`
+- Title text: "SSH Terminal | Meduseld Server"
+
+### Terminal
+
+- Embedded iframe pointing to `https://terminal.meduseld.io` (ttyd instance)
+- Full-height, no border, fills remaining viewport
+
+### Help Button (Floating)
+
+- Fixed position bottom-right corner, round gold button with question mark icon
+- Opens the Linux Commands Cheat Sheet modal
+
+### Linux Commands Cheat Sheet Modal
+
+Sections with command examples and descriptions:
+
+1. Navigation: `cd /srv/games/icarus`, `ls -lah`, `pwd`
+2. File Operations: `cat`, `tail -f`, `grep`
+3. Disk Usage: `du -sh *`, `df -h`
+4. Process Management: `ps aux | grep icarus`, `top`
+5. Permissions: `ls -l`, `chmod +x`
+6. Server Configuration: `nano ServerSettings.ini`, `nano start.sh` (with info box about start.sh purpose)
+7. Caution warning about destructive commands
+
+---
+
+## health.meduseld.io — Service Health Dashboard
+
+File: `meduseld/app/templates/health.html` (extends `base.html`)
+
+Public health monitoring page showing real-time status of all Meduseld services.
+
+### Service Status Cards (3 columns)
+
+Each card shows a spinner while checking, then displays Online (green check), Degraded (yellow warning), or Down (red X) with response time or error details.
+
+1. Control Panel — checks `panel.meduseld.io`
+2. SSH Terminal — checks `ssh.meduseld.io`
+3. Jellyfin Media — checks `jellyfin.meduseld.io`
+
+### Auto-Refresh
+
+- Checks all services on page load via `fetch(/<service>)`
+- Re-checks every 30 seconds
+- "Last updated" timestamp at the bottom
