@@ -2142,6 +2142,14 @@ def api_server_logs():
         return jsonify({"logs": [], "error": str(e)}), 500
 
 
+@app.route("/public/system-logs")
+def public_system_logs():
+    """Public system logs endpoint for system.meduseld.io.
+    Requires a Cloudflare Access Bypass policy for /public/* path.
+    Only returns system logs, no sensitive data."""
+    return api_server_logs()
+
+
 @app.route("/api/history")
 def api_history():
     return jsonify(list(history))
