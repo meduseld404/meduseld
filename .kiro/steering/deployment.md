@@ -167,9 +167,7 @@ WantedBy=multi-user.target
 
 ### Deployment Process
 
-The webhook at `/webhook/deploy.sh` references Docker commands, but these are NOT used in production.
-
-Actual deployment: push to main, then on the server pull and restart the service.
+Push to main, then on the server pull and restart the service. The webhook at `/webhook/deploy.sh` automates this.
 
 ### Common Issues
 

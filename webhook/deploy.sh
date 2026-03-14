@@ -7,31 +7,30 @@ echo "Time: $(date)"
 echo "========================================="
 
 # Navigate to project directory
-cd /app
+cd /srv/apps/meduseld
 
 # Pull latest changes
 echo "Pulling latest code from GitHub..."
+git reset --hard origin/main
 git pull origin main
 
-# Rebuild and restart containers
-echo "Rebuilding Docker containers..."
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+# Restart the service
+echo "Restarting meduseld service..."
+sudo systemctl restart meduseld
 
 # Wait for health check
-echo "Waiting for services to be healthy..."
-sleep 10
+echo "Waiting for service to be healthy..."
+sleep 5
 
-# Check if services are running
-if docker-compose ps | grep -q "Up"; then
+# Check if service is running
+if systemctl is-active --quiet meduseld; then
     echo "========================================="
     echo "Deployment successful!"
     echo "Time: $(date)"
     echo "========================================="
 else
     echo "========================================="
-    echo "Deployment failed - services not running"
+    echo "Deployment failed - service not running"
     echo "Time: $(date)"
     echo "========================================="
     exit 1
