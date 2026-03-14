@@ -129,7 +129,7 @@
             ></button>
           </div>
           <div class="modal-body">
-            <p class="text-muted mb-4">
+            <p class="text-light mb-4" style="opacity: 0.85;">
               Quick reference for managing the game server directory at
               <code>/srv/games/icarus</code>
             </p>
@@ -141,15 +141,15 @@
               </h6>
               <div class="command-item mb-2">
                 <code class="text-info">cd /srv/games/icarus</code>
-                <p class="text-muted mb-0 ms-3">Navigate to the Icarus dedicated server root directory where all game files, configs, and saves are stored.</p>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Navigate to the Icarus dedicated server root directory where all game files, configs, and saves are stored.</p>
               </div>
               <div class="command-item mb-2">
                 <code class="text-info">ls -lah</code>
-                <p class="text-muted mb-0 ms-3">List all files and folders including hidden ones, with permissions, owner, size in human-readable format, and modification dates.</p>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">List all files and folders including hidden ones, with permissions, owner, size in human-readable format, and modification dates.</p>
               </div>
               <div class="command-item mb-2">
                 <code class="text-info">pwd</code>
-                <p class="text-muted mb-0 ms-3">Print the full path of your current working directory. Useful when you're not sure where you are in the filesystem.</p>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Print the full path of your current working directory. Useful when you're not sure where you are in the filesystem.</p>
               </div>
             </div>
 
@@ -160,15 +160,15 @@
               </h6>
               <div class="command-item mb-2">
                 <code class="text-info">cat filename.txt</code>
-                <p class="text-muted mb-0 ms-3">Print the entire contents of a file to the terminal. Best for small files — for large files use <code class="text-info">less</code> instead.</p>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Print the entire contents of a file to the terminal. Best for small files — for large files use <code class="text-info">less</code> instead.</p>
               </div>
               <div class="command-item mb-2">
                 <code class="text-info">tail -f logfile.log</code>
-                <p class="text-muted mb-0 ms-3">Follow a log file in real-time, showing new lines as they're written. Great for watching server output live. Press Ctrl+C to stop.</p>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Follow a log file in real-time, showing new lines as they're written. Great for watching server output live. Press Ctrl+C to stop.</p>
               </div>
               <div class="command-item mb-2">
                 <code class="text-info">grep "error" logfile.log</code>
-                <p class="text-muted mb-0 ms-3">Search a file for lines containing the given text. Case-sensitive by default — add <code class="text-info">-i</code> for case-insensitive search.</p>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Search a file for lines containing the given text. Case-sensitive by default — add <code class="text-info">-i</code> for case-insensitive search.</p>
               </div>
             </div>
 
@@ -179,11 +179,11 @@
               </h6>
               <div class="command-item mb-2">
                 <code class="text-info">du -sh *</code>
-                <p class="text-muted mb-0 ms-3">Show the total size of each file and folder in the current directory. Helpful for finding what's eating up disk space.</p>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Show the total size of each file and folder in the current directory. Helpful for finding what's eating up disk space.</p>
               </div>
               <div class="command-item mb-2">
                 <code class="text-info">df -h</code>
-                <p class="text-muted mb-0 ms-3">Show how much disk space is used and available on each mounted filesystem. Check this if the server is running low on storage.</p>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Show how much disk space is used and available on each mounted filesystem. Check this if the server is running low on storage.</p>
               </div>
             </div>
 
@@ -194,11 +194,11 @@
               </h6>
               <div class="command-item mb-2">
                 <code class="text-info">ps aux | grep icarus</code>
-                <p class="text-muted mb-0 ms-3">List all running processes and filter for Icarus-related ones. Shows PID, CPU/memory usage, and the full command. Use the PID with <code class="text-info">kill</code> if needed.</p>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">List all running processes and filter for Icarus-related ones. Shows PID, CPU/memory usage, and the full command. Use the PID with <code class="text-info">kill</code> if needed.</p>
               </div>
               <div class="command-item mb-2">
                 <code class="text-info">top</code>
-                <p class="text-muted mb-0 ms-3">Live view of system resource usage — CPU, memory, and running processes sorted by activity. Press <code class="text-info">q</code> to quit, <code class="text-info">M</code> to sort by memory.</p>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Live view of system resource usage — CPU, memory, and running processes sorted by activity. Press <code class="text-info">q</code> to quit, <code class="text-info">M</code> to sort by memory.</p>
               </div>
             </div>
 
@@ -209,11 +209,11 @@
               </h6>
               <div class="command-item mb-2">
                 <code class="text-info">ls -l</code>
-                <p class="text-muted mb-0 ms-3">List files with their permission flags (e.g. <code class="text-info">rwxr-xr-x</code>), owner, group, and size. The first column shows read/write/execute for owner, group, and others.</p>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">List files with their permission flags (e.g. <code class="text-info">rwxr-xr-x</code>), owner, group, and size. The first column shows read/write/execute for owner, group, and others.</p>
               </div>
               <div class="command-item mb-2">
                 <code class="text-info">chmod +x script.sh</code>
-                <p class="text-muted mb-0 ms-3">Add execute permission to a script so it can be run directly with <code class="text-info">./script.sh</code>. Without this, you'd get a "Permission denied" error.</p>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Add execute permission to a script so it can be run directly with <code class="text-info">./script.sh</code>. Without this, you'd get a "Permission denied" error.</p>
               </div>
             </div>
 
@@ -226,18 +226,18 @@
                 <code class="text-info">
                   nano Icarus/Saved/Config/WindowsServer/ServerSettings.ini
                 </code>
-                <p class="text-muted mb-0 ms-3">Open the server config file in the nano text editor. Change game settings like difficulty, max players, and session name. Press Ctrl+O to save, Ctrl+X to exit.</p>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Open the server config file in the nano text editor. Change game settings like difficulty, max players, and session name. Press Ctrl+O to save, Ctrl+X to exit.</p>
               </div>
               <div class="command-item mb-2">
                 <code class="text-info">nano start.sh</code>
-                <p class="text-muted mb-0 ms-3">Edit the server startup script that controls how the game server launches, including Wine/Proton settings and launch arguments.</p>
+                <p class="text-light mb-0 ms-3" style="opacity: 0.85;">Edit the server startup script that controls how the game server launches, including Wine/Proton settings and launch arguments.</p>
               </div>
               <div
                 class="mt-3 p-3"
                 style="background-color: rgba(230, 198, 92, 0.1); border-radius: 5px"
               >
                 <p class="mb-2"><strong>About start.sh:</strong></p>
-                <ul class="text-muted mb-0" style="font-size: 0.9rem">
+                <ul class="text-light mb-0" style="font-size: 0.9rem; opacity: 0.85;">
                   <li>Launches Icarus server using Wine/Proton compatibility layer</li>
                   <li>Manages tmux session for background server operation</li>
                   <li>Checks for existing server processes to prevent duplicates</li>
