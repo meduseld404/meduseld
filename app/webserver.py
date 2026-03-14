@@ -2175,7 +2175,32 @@ def health_check_public():
     return jsonify({"status": "ok"}), 200
 
 
-@app.route("/check/<service>")
+def _proxy_microservice(url):
+    """Proxy a request to a local microservice and return its response."""
+    try:
+        if request.method == "GET":
+            resp = requests.get(url, timeout=10)
+        elif request.method == "POST":
+            resp = requests.post(url, json=request.get_json(silent=True) or {}, timeout=10)
+        elif request.method == "OPTIONS":
+            response = make_response("", 204)
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+            return response
+        else:
+            abort(405)
+        flask_resp = make_response(resp.content, resp.status_code)
+        flask_resp.headers["Content-Type"] = resp.headers.get("Content-Type", "application/json")
+        flask_resp.headers["Access-Control-Allow-Origin"] = "*"
+        return flask_resp
+    except requests.exceptions.ConnectionError:
+        return jsonify({"error": "Service unavailable"}), 503
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+
+@app.route("/check/<service>", methods=["GET", "POST", "OPTIONS"])
 def check_service(service):
     """
     Health check endpoint for specific services on health.meduseld.io
@@ -2197,6 +2222,18 @@ def check_service(service):
         "ssh": "https://ssh.meduseld.io/health-check-b8f3a9c2",
         "jellyfin": "https://jellyfin.meduseld.io/health-check-b8f3a9c2",
     }
+
+    # Proxy to backup microservice
+    if service == "backup":
+        return _proxy_microservice("http://127.0.0.1:5003/backup")
+
+    # Backup status polling
+    if service == "backup-status":
+        return _proxy_microservice("http://127.0.0.1:5003/status")
+
+    # Proxy to reboot microservice
+    if service == "reboot":
+        return _proxy_microservice("http://127.0.0.1:5002/reboot")
 
     if service not in service_urls:
         return jsonify({"status": "error", "message": "Unknown service"}), 404

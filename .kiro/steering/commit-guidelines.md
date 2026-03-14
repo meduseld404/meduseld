@@ -91,4 +91,4 @@ Commits are automatically validated via git hooks. Invalid commits will be rejec
 
 ## When Making Changes
 
-Always commit your changes using this format. The repository has commitlint configured to enforce these rules.
+Always commit your changes using this format after completing each logical unit of work. Do not wait for the user to ask — commit automatically when changes are done. The repository has commitlint configured to enforce these rules.
