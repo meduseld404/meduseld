@@ -1428,6 +1428,7 @@ def home():
         logs=logs,
         dev_mode=IS_DEV or dev_mode_active,
         server_state=get_server_state(),
+        user=get_current_user(),
     )
 
 

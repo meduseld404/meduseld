@@ -6,6 +6,58 @@
       <i class="bi bi-arrow-left"></i> Back to Services
     </a>
     <div class="d-flex align-items-center gap-2 panel-nav-buttons">
+      <!-- User Profile -->
+      {% if user %}
+      <div class="position-relative" id="panel-profile-container">
+        <div
+          class="d-flex align-items-center gap-2"
+          style="cursor: pointer"
+          id="panel-profile-toggle"
+        >
+          {% if user.avatar_url %}
+          <img
+            src="{{ user.avatar_url }}"
+            alt="Avatar"
+            style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid #e6c65c"
+          />
+          {% else %}
+          <i class="bi bi-person-circle" style="font-size: 1.6rem; color: #e6c65c"></i>
+          {% endif %}
+          <span class="btn-label text-light" style="font-size: 0.85rem"
+            >{{ user.display_name or user.username }}</span
+          >
+          {% if user.role == 'admin' %}
+          <span class="badge" style="font-size: 0.6rem; background: #e6c65c; color: #0b1f14"
+            >Admin</span
+          >
+          {% endif %}
+        </div>
+        <div
+          id="panel-profile-dropdown"
+          class="position-absolute end-0 mt-2 py-2 rounded shadow-lg"
+          style="
+            display: none;
+            min-width: 200px;
+            background: #1a1a2e;
+            border: 1px solid rgba(230, 198, 92, 0.3);
+            z-index: 1050;
+          "
+        >
+          <div
+            class="px-3 py-2 border-bottom"
+            style="border-color: rgba(230, 198, 92, 0.2) !important"
+          >
+            <div class="text-light" style="font-size: 0.85rem; font-weight: 600">
+              {{ user.display_name or user.username }}
+            </div>
+            <div class="text-muted" style="font-size: 0.75rem">@{{ user.username }}</div>
+          </div>
+          <div class="px-3 py-2">
+            <div class="text-muted" style="font-size: 0.75rem">Role: {{ user.role or 'user' }}</div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
       <a href="https://ssh.meduseld.io" class="btn btn-dark btn-sm">
         <i class="bi bi-terminal"></i> <span class="btn-label">SSH Terminal</span>
       </a>
@@ -951,6 +1003,23 @@
   }, 1000);
   loadHistory();
   setInterval(loadHistory, 30000);
+</script>
+
+<script>
+  // Profile dropdown toggle
+  (function () {
+    var toggle = document.getElementById('panel-profile-toggle');
+    var dropdown = document.getElementById('panel-profile-dropdown');
+    if (toggle && dropdown) {
+      toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+      });
+      document.addEventListener('click', function () {
+        dropdown.style.display = 'none';
+      });
+    }
+  })();
 </script>
 
 {% endblock %}
