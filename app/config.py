@@ -49,7 +49,14 @@ STEAM_APP_ID = "2089300"
 SERVER_ARGS = ["-SteamServerName=404localserver", "-Port=17777", "-QueryPort=27015", "-Log"]
 
 # ================= SECURITY =================
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "meduseld.io", "panel.meduseld.io", "ssh.meduseld.io", "snowmane.meduseld.io"]
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "meduseld.io",
+    "panel.meduseld.io",
+    "ssh.meduseld.io",
+    "snowmane.meduseld.io",
+]
 
 # ================= RATE LIMITING =================
 RATE_LIMIT_WINDOW = 60  # seconds
@@ -104,14 +111,24 @@ SECRET_KEY = (
 
 # ================= OIDC / AUTHENTICATION =================
 OIDC_WORKER_URL = os.environ.get("OIDC_WORKER_URL", "https://discord-oidc.404-41f.workers.dev/")
+JWT_SECRET = os.environ.get("JWT_SECRET", "dev-jwt-secret-change-in-production")
+
+# ================= DATABASE =================
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    (
+        "postgresql://meduseld:meduseld@localhost:5432/meduseld_db"
+        if not IS_DEV
+        else "sqlite:///"
+        + os.path.join(os.path.dirname(os.path.abspath(__file__)), "meduseld_dev.db")
+    ),
+)
 
 # ================= GOOGLE DRIVE BACKUP =================
 GOOGLE_CLIENT_ID = os.environ.get(
     "GOOGLE_CLIENT_ID", "282219108850-al0ddv2us3ovig0lg18lhae7m7ocemev.apps.googleusercontent.com"
 )
-GOOGLE_CLIENT_SECRET = os.environ.get(
-    "GOOGLE_CLIENT_SECRET", None
-)
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", None)
 GOOGLE_REDIRECT_URI = "https://panel.meduseld.io/oauth2callback"
 GOOGLE_DRIVE_PARENT_FOLDER_ID = "10Q0jIUL64QG8jitw4INtTjE7oHH-aBeQ"  # Main backup folder
 GOOGLE_DRIVE_GAME_FOLDER_NAME = "icarus"  # Subfolder name for this game
