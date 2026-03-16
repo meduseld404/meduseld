@@ -79,10 +79,10 @@
             <div class="text-light" style="font-size: 0.85rem; font-weight: 600">
               {{ user.display_name or user.username }}
             </div>
-            <div class="text-muted" style="font-size: 0.75rem">@{{ user.username }}</div>
+            <div style="font-size: 0.75rem; color: #a0a0b8">@{{ user.username }}</div>
           </div>
           <div class="px-3 py-2">
-            <div class="text-muted" style="font-size: 0.75rem">Role: {{ user.role or 'user' }}</div>
+            <div style="font-size: 0.75rem; color: #a0a0b8">Role: {{ user.role or 'user' }}</div>
           </div>
           <div
             class="px-3 py-2 border-top"
