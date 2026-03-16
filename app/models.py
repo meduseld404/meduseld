@@ -44,8 +44,15 @@ class User(db.Model):
 
     @staticmethod
     def get_or_create(discord_id, username, display_name=None, avatar_hash=None, email=None):
-        """Find existing user by Discord ID or create a new one. Updates profile info on each login."""
+        """Find existing user by Discord ID (or email fallback) or create a new one.
+        Updates profile info on each login."""
         user = User.query.filter_by(discord_id=str(discord_id)).first()
+
+        # If not found by discord_id, try email — this handles the case where
+        # the user was already synced with their real Discord ID but Cloudflare
+        # Access sends its own UUID as the sub claim on the next login.
+        if not user and email:
+            user = User.query.filter_by(email=email).first()
 
         if user:
             # Update profile info on each login
