@@ -46,6 +46,7 @@ Each active service card has a status indicator badge that shows Online/Offline/
    - "Open Edoras" button → opens a modal with two options (disabled when offline):
      - "View Library" → calls `/api/jellyfin-auth` to auto-provision a Jellyfin account and get an auth token, then navigates (same tab) to `jellyfin.meduseld.io/sso-login` which sets localStorage credentials and opens Jellyfin logged in. Falls back to navigating to Jellyfin directly if auth fails. Shows "Connecting..." spinner during auth.
      - "Request" button → links to `https://overseerr.meduseld.io` (opens in new tab)
+     - "Manage" button (admin only, hidden for non-admin users) → links to `https://edoras.meduseld.io` Edoras management page. Shows gold "Admin" badge.
    - SSO login page (`/sso-login`): uses an iframe-first approach to avoid a race condition where Jellyfin's ConnectionManager overwrites localStorage credentials. Loads `/web/index.html` in a hidden iframe, polls localStorage every 250ms until Jellyfin initializes `jellyfin_credentials` with `Servers[0].Id`, then patches in `AccessToken`/`UserId` and redirects. Falls back to direct credential write after 15 seconds.
    - Direct visit auto-login: when a user visits `jellyfin.meduseld.io` directly with a valid `CF_Authorization` cookie, an injected script automatically calls `/api/jellyfin-auth`, then polls localStorage waiting for Jellyfin's ConnectionManager to initialize credentials before patching in the auth token. Uses `sessionStorage` flag to prevent retry loops (one attempt per session).
 
@@ -363,6 +364,29 @@ Static admin page for managing user roles and account status. Served by Cloudfla
 
 - If the Flask backend is unreachable, the table shows "Backend is offline. Unable to load users."
 - User count badge shows "Backend Offline" in red
+
+---
+
+## edoras.meduseld.io — Edoras Management (Admin Only)
+
+File: `meduseld-site/edoras/index.html`
+
+Admin page for managing entertainment and media services. Non-admin users are redirected to `services.meduseld.io?restricted=edoras-management`.
+
+### Navigation
+
+- "Back to Services" button → navigates to `https://services.meduseld.io`
+- Profile widget (top-right, fixed position)
+
+### Service Cards (3-column grid)
+
+Each card has an icon, title, description, and "Open" button that opens the service in a new tab.
+
+1. **Overseerr** → `https://overseerr.meduseld.io` — Media request management
+2. **Sonarr** → `https://sonarr.meduseld.io` — TV show management and automation
+3. **Radarr** → `https://radarr.meduseld.io` — Movie management and automation
+4. **Prowlarr** → `https://prowlarr.meduseld.io` — Indexer management for Sonarr and Radarr
+5. **qBittorrent** → `https://qbit.meduseld.io` — Download client management
 
 ---
 
