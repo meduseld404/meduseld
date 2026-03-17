@@ -35,6 +35,17 @@ Served via Cloudflare Pages at `/srv/meduseld-site`
   - Displays server logs from panel.meduseld.io API
   - Linux commands help modal
   - Auto-refreshes logs every 30 seconds
+  - Admin-only: non-admin users are redirected to services
+
+- **admin.meduseld.io** (admin/index.html)
+  - Admin user management page (static, served by Cloudflare Pages)
+  - Title: "Meduseld - User Management"
+  - Admin-only: non-admin users are redirected to services
+  - Lists all users with avatar, name, Discord ID, role, status, last login
+  - Promote/demote users between admin and user roles
+  - Activate/deactivate user accounts
+  - Shows "Backend Offline" state if Flask is down
+  - Calls `panel.meduseld.io/api/admin/users` for data
 
 ### meduseld Repository (Flask Backend)
 
@@ -90,7 +101,7 @@ Table: `users`
 | Column       | Type        | Notes                                                                  |
 | ------------ | ----------- | ---------------------------------------------------------------------- |
 | id           | Integer     | Primary key                                                            |
-| discord_id   | String(64)  | Unique, indexed. Real Discord snowflake ID (e.g. `170638230469738497`) |
+| discord_id   | String(64)  | Unique, indexed. Real Discord snowflake ID (e.g. `000000000000000000`) |
 | username     | String(128) | Discord username                                                       |
 | display_name | String(128) | Discord global_name                                                    |
 | avatar_hash  | String(256) | Discord avatar hash for CDN URL                                        |
@@ -149,6 +160,33 @@ sudo -u postgres psql -d meduseld_db -c "SELECT discord_id, username, avatar_has
 - `meduseld/app/webserver.py` — `authenticate_request()` middleware, `@require_auth` and `@require_role` decorators, `/api/me`, `/api/sync-identity`
 - `meduseld-site/static/auth.js` — Client-side auth: `MeduseldAuth.getUser()`, `.isAuthenticated()`, `.getRole()`, `.hasRole()`, `.syncUser()`
 - `herugrim/worker.js` — Discord OIDC bridge worker
+
+### Role-Based Access Control
+
+Two roles exist: `user` (default) and `admin`.
+
+- Roles are stored in the `users` table `role` column
+- `@require_role("admin")` decorator on Flask endpoints checks `g.user.role`
+- `MeduseldAuth.hasRole("admin")` on the client side (checks after `syncUser()` completes)
+- Admin-only pages: SSH Terminal (`ssh.meduseld.io`), System Monitor (`system.meduseld.io`), Admin Panel (`admin.meduseld.io`)
+- Admin-only service cards (SSH, System Monitor) are hidden by default on the services page (`display: none`), shown via JS after auth sync confirms admin role
+- Non-admin users navigating directly to admin-only pages are redirected to `services.meduseld.io?restricted=<page-name>`, which shows a toast banner
+- Server-side: SSH terminal route returns 403 for non-admin users; admin API endpoints use `@require_auth` + `@require_role("admin")`
+- Self-protection: admins cannot demote or deactivate their own account via the API
+
+### Bootstrap: Setting the First Admin
+
+Since the admin page requires admin role, the first admin must be set directly in the database:
+
+```bash
+# Check existing users
+sudo -u postgres psql -d meduseld_db -c "SELECT id, discord_id, username, role FROM users;"
+
+# Promote a user to admin
+sudo -u postgres psql -d meduseld_db -c "UPDATE users SET role = 'admin' WHERE discord_id = 'YOUR_DISCORD_ID';"
+```
+
+After the first admin is set, subsequent admins can be promoted from the admin page UI.
 
 ### Public Paths (No Auth Required)
 
@@ -278,6 +316,11 @@ When the server "goes offline" after pressing start:
 - `GET /api/history` - Get stats history
 - `GET /api/activity` - Get activity log
 - `GET /jellyfin/*` - Proxy to Jellyfin service
+
+### Admin Endpoints (require admin role)
+
+- `GET /api/admin/users` - List all users with full profile data
+- `PUT /api/admin/users/<id>` - Update user role (`admin`/`user`) or active status (`true`/`false`)
 
 ## Environment Variables
 

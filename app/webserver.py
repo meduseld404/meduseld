@@ -546,6 +546,60 @@ def api_sync_identity():
         return jsonify({"error": "Sync failed"}), 500
 
 
+# ================= ADMIN API =================
+
+
+@app.route("/api/admin/users")
+@require_auth
+@require_role("admin")
+def api_admin_users():
+    """Return all users for admin management."""
+    from models import User
+
+    users = User.query.order_by(User.created_at.desc()).all()
+    return jsonify({"users": [u.to_dict() for u in users]}), 200
+
+
+@app.route("/api/admin/users/<int:user_id>", methods=["PUT"])
+@require_auth
+@require_role("admin")
+def api_admin_update_user(user_id):
+    """Update a user's role or active status."""
+    from models import User
+    from database import db
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    # Prevent admins from demoting themselves
+    if user.id == g.user.id and data.get("role") and data["role"] != "admin":
+        return jsonify({"error": "Cannot change your own role"}), 400
+
+    if "role" in data and data["role"] in ("admin", "user"):
+        user.role = data["role"]
+    if "is_active" in data and isinstance(data["is_active"], bool):
+        # Prevent admins from deactivating themselves
+        if user.id == g.user.id and not data["is_active"]:
+            return jsonify({"error": "Cannot deactivate your own account"}), 400
+        user.is_active = data["is_active"]
+
+    try:
+        db.session.commit()
+        logger.info(
+            f"Admin {g.user.username} updated user {user.username}: role={user.role}, active={user.is_active}"
+        )
+        return jsonify({"user": user.to_dict()}), 200
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error updating user: {e}")
+        return jsonify({"error": "Update failed"}), 500
+
+
 # ================= SERVER CONTROL =================
 
 
@@ -1414,8 +1468,10 @@ def home():
     """Route based on hostname"""
     host = request.host.split(":")[0]
 
-    # If accessed via ssh subdomain, show terminal wrapper
+    # If accessed via ssh subdomain, show terminal wrapper (admin only)
     if host == "ssh.meduseld.io":
+        if not hasattr(g, "user") or g.user is None or (g.user.role != "admin" and not IS_DEV):
+            return jsonify({"error": "Insufficient permissions"}), 403
         return render_template("terminal.html")
 
     # If accessed via jellyfin subdomain, proxy to Jellyfin

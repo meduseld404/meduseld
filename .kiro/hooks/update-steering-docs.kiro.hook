@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Update Steering Docs",
+  "description": "After completing a task, review if any changes affect the steering documentation (deployment.md, page-functionality.md) and update them to reflect new features, endpoints, pages, or behavioral changes. Keep both meduseld and meduseld-site steering files in sync.",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Review the changes you just made. If any new pages, endpoints, features, role changes, or behavioral changes were introduced, update the relevant steering files in .kiro/steering/ (deployment.md for infrastructure/API/auth changes, page-functionality.md for UI/page changes). Keep both meduseld/.kiro/steering/ and meduseld-site/.kiro/steering/ in sync. Only update if there are meaningful changes to document — skip if the changes were trivial (typos, formatting, etc.)."
+  }
+}
