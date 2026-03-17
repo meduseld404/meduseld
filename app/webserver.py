@@ -2575,6 +2575,13 @@ def check_service(service):
     if service == "reboot":
         return _proxy_microservice("http://127.0.0.1:5002/reboot")
 
+    # Proxy to monitoring microservice
+    if service == "stats":
+        return _proxy_microservice("http://127.0.0.1:5004/stats")
+
+    if service == "history":
+        return _proxy_microservice("http://127.0.0.1:5004/history")
+
     if service not in service_urls:
         return jsonify({"status": "error", "message": "Unknown service"}), 404
 
