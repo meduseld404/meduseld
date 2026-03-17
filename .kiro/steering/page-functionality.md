@@ -44,11 +44,11 @@ Each active service card has a status indicator badge that shows Online/Offline/
    - Status badge: checks jellyfin health
    - "Open Palantir" button → links to `https://jellyfin.meduseld.io` (disabled when offline)
 
-3. **SSH Access**
+3. **SSH Access** (Admin only — hidden for non-admin users)
    - Status badge: checks SSH health
    - "Open SSH Terminal" button → links to `https://ssh.meduseld.io` (disabled when offline)
 
-4. **System Monitor**
+4. **System Monitor** (Admin only — hidden for non-admin users)
    - Always shows "Active" badge (static page, always available)
    - "Open System Monitor" button → links to `https://system.meduseld.io`
 
@@ -94,14 +94,19 @@ Static display of hardware specs: AMD Ryzen 7 2700, 32GB DDR4 3600, RTX 3060, 1T
 - Herugrim Repo → same as site repo link (likely needs updating)
 - Gmail → `https://mail.google.com`
 - Drive → Google Drive backups folder
+- Admin → `https://admin.meduseld.io` (admin only — hidden for non-admin users)
+
+### Restricted Access Toast
+
+When a non-admin user is redirected from an admin-only page (SSH, System Monitor, Admin), the services page shows a warning toast banner: "[Page Name] is not available for your account type." Auto-dismisses after 8 seconds. The `?restricted=` URL parameter is cleaned after display. Built with DOM APIs (not innerHTML) to prevent XSS.
 
 ---
 
-## system.meduseld.io — System Monitor
+## system.meduseld.io — System Monitor (Admin Only)
 
 File: `meduseld-site/system/index.html`
 
-Server logs viewer and system management page.
+Server logs viewer and system management page. Non-admin users are redirected to `services.meduseld.io?restricted=system-monitor`.
 
 ### Navigation
 
@@ -257,11 +262,11 @@ After any action: polling increases to 1-second intervals for 30 seconds, then r
 
 ---
 
-## ssh.meduseld.io — SSH Terminal Wrapper
+## ssh.meduseld.io — SSH Terminal Wrapper (Admin Only)
 
 File: `meduseld/app/templates/terminal.html`
 
-Wrapper page that embeds the ttyd web terminal in an iframe with a navigation bar and help modal.
+Wrapper page that embeds the ttyd web terminal in an iframe with a navigation bar and help modal. Non-admin users are blocked server-side (403) and redirected client-side to `services.meduseld.io?restricted=ssh-terminal`.
 
 ### Navigation Bar
 
@@ -290,6 +295,37 @@ Sections with command examples and descriptions:
 5. Permissions: `ls -l`, `chmod +x`
 6. Server Configuration: `nano ServerSettings.ini`, `nano start.sh` (with info box about start.sh purpose)
 7. Caution warning about destructive commands
+
+---
+
+## admin.meduseld.io — User Management (Admin Only)
+
+File: `meduseld-site/admin/index.html`
+
+Static admin page for managing user roles and account status. Served by Cloudflare Pages independently of the Flask backend. Non-admin users are redirected to `services.meduseld.io?restricted=user-management`.
+
+### Navigation
+
+- "Back to Services" button → navigates to `https://services.meduseld.io`
+
+### Users Table
+
+- Fetches from `GET https://panel.meduseld.io/api/admin/users` with credentials
+- "Refresh" button → re-fetches user list
+- Columns: User (avatar + display name), Discord ID, Role, Status, Last Login, Actions
+- Current user row shows a "You" badge
+- Inactive users shown at 50% opacity
+
+### Actions Per User (not available on own account)
+
+- Promote/Demote button → `PUT /api/admin/users/<id>` with `{role: "admin"}` or `{role: "user"}`
+- Activate/Deactivate button → `PUT /api/admin/users/<id>` with `{is_active: true}` or `{is_active: false}`
+- Toast notifications on success/failure
+
+### Backend Offline State
+
+- If the Flask backend is unreachable, the table shows "Backend is offline. Unable to load users."
+- User count badge shows "Backend Offline" in red
 
 ---
 
