@@ -1760,6 +1760,15 @@ def kill():
     # Force state to stopping (kill should always work)
     set_server_state("stopping", force=True)
 
+    # Write kill marker to startup log so the panel knows this was user-initiated
+    try:
+        startup_log = os.path.join(SERVER_DIR, "startup.log")
+        with open(startup_log, "a") as f:
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            f.write(f"[{ts}] User kill: Server force killed by user\n")
+    except Exception as e:
+        logger.warning(f"Could not write kill marker: {e}")
+
     def kill_sequence():
         # First kill attempt
         logger.info("Executing force kill")

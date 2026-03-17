@@ -718,12 +718,19 @@
             lastSeparatorIndex = i;
             continue;
           }
+          // User-initiated kill (expected - purple)
+          else if (line.includes('User kill:')) {
+            logContent += `<span style="color: #8b5cf6;">${line}</span><br>`;
+            continue;
+          }
           // Process monitor detected death
           else if (line.includes('Process monitor: Server process no longer running')) {
-            // Check if this was preceded by an idle shutdown marker
+            // Check if this was preceded by an idle shutdown or user kill marker
             const prevLines = data.logs.slice(Math.max(0, i - 5), i);
-            const wasIdleShutdown = prevLines.some((l) => l.includes('Idle shutdown:'));
-            if (wasIdleShutdown) {
+            const wasExpected = prevLines.some(
+              (l) => l.includes('Idle shutdown:') || l.includes('User kill:')
+            );
+            if (wasExpected) {
               logContent += `<span style="color: #888; font-size: 0.9em;">${line}</span><br>`;
             } else {
               logContent += `<div style="border-top: 2px solid #8b0000; margin: 10px 0; padding-top: 10px;">
