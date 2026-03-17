@@ -49,7 +49,7 @@ def add_cors_headers(response):
     origin = request.headers.get("Origin")
     if origin and "meduseld.io" in origin:
         response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
         response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
@@ -390,7 +390,16 @@ def authenticate_request():
         return
 
     # Check for Cloudflare Access JWT
+    # Priority: Cf-Access-Jwt-Assertion header > CF_Authorization cookie
     cf_token = request.headers.get("Cf-Access-Jwt-Assertion")
+    if not cf_token:
+        # Fallback: try the CF_Authorization cookie. This cookie is set by
+        # Cloudflare Access on .meduseld.io, so it's available on cross-origin
+        # requests from services.meduseld.io, system.meduseld.io, etc.
+        # This is the key mechanism that lets /api/me and /api/sync-identity
+        # work when called from static pages on other subdomains.
+        cf_token = request.cookies.get("CF_Authorization")
+
     if not cf_token:
         # No token and no session — in production this means Cloudflare Access
         # hasn't authenticated yet. The request shouldn't reach here if
@@ -514,8 +523,12 @@ def api_sync_identity():
     if not data or not data.get("discord_id"):
         return jsonify({"error": "Missing discord_id"}), 400
 
-    # We need a session user to know which DB record to update
+    # We need an authenticated user to know which DB record to update.
+    # Try session first, fall back to g.user (set by authenticate_request
+    # from CF_Authorization cookie on cross-origin requests).
     user_data = session.get("user")
+    if not user_data and hasattr(g, "user") and g.user is not None:
+        user_data = g.user.to_dict()
     if not user_data:
         return jsonify({"error": "Not authenticated"}), 401
 
