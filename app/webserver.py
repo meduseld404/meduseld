@@ -3008,7 +3008,7 @@ def check_service(service):
             origin = request.headers.get("Origin")
             if origin and "meduseld.io" in origin:
                 response.headers["Access-Control-Allow-Origin"] = origin
-                response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
             return response
 
@@ -3060,10 +3060,8 @@ def check_service(service):
 
             return _cal_cors(jsonify({"error": "Method not allowed"}), 405)
 
-        # DELETE /check/calendar-<id>
+        # DELETE /check/calendar-<id> or PUT /check/calendar-<id> (RSVP)
         if service.startswith("calendar-"):
-            if user.role != "admin":
-                return _cal_cors(jsonify({"error": "Insufficient permissions"}), 403)
             try:
                 event_id = int(service.split("calendar-")[1])
             except (ValueError, IndexError) as e:
@@ -3071,6 +3069,8 @@ def check_service(service):
                 return _cal_cors(jsonify({"error": "Invalid event ID"}), 400)
 
             if request.method == "DELETE":
+                if user.role != "admin":
+                    return _cal_cors(jsonify({"error": "Insufficient permissions"}), 403)
                 from models import CalendarEvent
                 from database import db
 
@@ -3081,6 +3081,43 @@ def check_service(service):
                 db.session.commit()
                 logger.info("Admin %s deleted calendar event %d", user.username, event_id)
                 return _cal_cors(jsonify({"ok": True}), 200)
+
+            if request.method == "PUT":
+                data = request.get_json()
+                if not data or not data.get("status"):
+                    return _cal_cors(jsonify({"error": "Status required"}), 400)
+                status = data["status"]
+                if status not in ("going", "maybe", "not_going"):
+                    return _cal_cors(jsonify({"error": "Invalid status"}), 400)
+                from models import CalendarEvent, EventRSVP
+                from database import db
+
+                event = CalendarEvent.query.get(event_id)
+                if not event:
+                    return _cal_cors(jsonify({"error": "Event not found"}), 404)
+                try:
+                    rsvp = EventRSVP.query.filter_by(event_id=event_id, user_id=user.id).first()
+                    if rsvp:
+                        if rsvp.status == status:
+                            # Toggle off — remove RSVP
+                            db.session.delete(rsvp)
+                            db.session.commit()
+                            logger.info(
+                                "User %s removed RSVP for event %d", user.username, event_id
+                            )
+                            return _cal_cors(jsonify({"ok": True, "removed": True}), 200)
+                        rsvp.status = status
+                        rsvp.updated_at = datetime.utcnow()
+                    else:
+                        rsvp = EventRSVP(event_id=event_id, user_id=user.id, status=status)
+                        db.session.add(rsvp)
+                    db.session.commit()
+                    logger.info("User %s RSVP'd '%s' for event %d", user.username, status, event_id)
+                    return _cal_cors(jsonify({"ok": True, "status": status}), 200)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to save RSVP: %s", e)
+                    return _cal_cors(jsonify({"error": "RSVP failed"}), 500)
 
             return _cal_cors(jsonify({"error": "Method not allowed"}), 405)
 
