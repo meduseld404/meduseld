@@ -62,7 +62,7 @@ Each active service card has a status indicator badge that shows Online/Offline/
 
 ### Service Cards (Coming Soon — Disabled)
 
-- VPN Access — OpenVPN remote access
+- VPN Access — Mullvad remote access
 - Game Wiki — community wiki for current game
 - The Red Book — e-books and audiobooks
 - Trivia Game — trivia questions
