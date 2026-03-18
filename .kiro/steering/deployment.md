@@ -45,7 +45,7 @@ Served via Cloudflare Pages at `/srv/meduseld-site`
   - Promote/demote users between admin and user roles
   - Activate/deactivate user accounts
   - Shows "Backend Offline" state if Flask is down
-  - Calls `panel.meduseld.io/api/admin/users` for data
+  - Calls `health.meduseld.io/check/admin-users` for data (routed through health to bypass Cloudflare Access session requirement; authenticates via `CF_Authorization` cookie directly)
 
 ### meduseld Repository (Flask Backend)
 
@@ -187,7 +187,7 @@ sudo -u postgres psql -d meduseld_db -c "SELECT discord_id, username, avatar_has
 
 ### Auth Files
 
-- `meduseld/app/webserver.py` — `authenticate_request()` middleware, `@require_auth` and `@require_role` decorators, `/api/me`, `/api/sync-identity`
+- `meduseld/app/webserver.py` — `authenticate_request()` middleware, `_authenticate_from_cookie()` helper (for public-host routes that need auth), `@require_auth` and `@require_role` decorators, `/api/me`, `/api/sync-identity`
 - `meduseld-site/static/auth.js` — Client-side auth: `MeduseldAuth.getUser()`, `.isAuthenticated()`, `.getRole()`, `.hasRole()`, `.syncUser()`
 - `herugrim/worker.js` — Discord OIDC bridge worker
 
@@ -344,7 +344,7 @@ Three lightweight Python HTTP servers run independently of the Flask app so the 
    - Triggers `meduseld-backup.service` via systemd
    - Env: `BACKUP_SECRET`
 
-Flask proxy routing (`check_service()` in `webserver.py`): requests to `health.meduseld.io/check/stats` → `127.0.0.1:5004/stats`, `/check/history` → `127.0.0.1:5004/history`, `/check/backup` → `127.0.0.1:5003/backup`, `/check/backup-status` → `127.0.0.1:5003/status`, `/check/reboot` → `127.0.0.1:5002/reboot`, `/check/system-logs` → Flask's own `api_server_logs()`.
+Flask proxy routing (`check_service()` in `webserver.py`): requests to `health.meduseld.io/check/stats` → `127.0.0.1:5004/stats`, `/check/history` → `127.0.0.1:5004/history`, `/check/backup` → `127.0.0.1:5003/backup`, `/check/backup-status` → `127.0.0.1:5003/status`, `/check/reboot` → `127.0.0.1:5002/reboot`, `/check/system-logs` → Flask's own `api_server_logs()`, `/check/admin-users` → admin users list (authenticated via `CF_Authorization` cookie), `/check/admin-users-<id>` → admin user update (PUT).
 
 ### Common Issues
 

@@ -372,7 +372,8 @@ Static admin page for managing user roles and account status. Served by Cloudfla
 
 - If the Flask backend is unreachable, the table shows "Backend is offline. Unable to load users."
 - User count badge shows "Backend Offline" in red
-- If Cloudflare Access hasn't established a session for `panel.meduseld.io` (common when signing in via a static site first), the page first attempts a silent session establishment by loading `panel.meduseld.io/health` in a hidden iframe, waits 3 seconds, then auto-retries the fetch. If the retry also fails, shows "Session not established" with a link to open the panel and a Retry button. User count badge shows "Not Connected" in yellow.
+- If the `CF_Authorization` cookie is invalid or expired (401/403), shows "Authentication failed" with a suggestion to log out and back in. User count badge shows "Auth Error" in yellow.
+- API calls are routed through `health.meduseld.io/check/admin-users` to bypass Cloudflare Access session requirements. Auth is handled by decoding the `CF_Authorization` cookie server-side via `_authenticate_from_cookie()`.
 
 ---
 
