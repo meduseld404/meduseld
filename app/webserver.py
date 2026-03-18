@@ -2857,6 +2857,7 @@ def _authenticate_from_cookie():
     Returns a User object or None."""
     cf_token = request.cookies.get("CF_Authorization")
     if not cf_token:
+        logger.warning("_authenticate_from_cookie: No CF_Authorization cookie found")
         return None
 
     try:
@@ -2871,7 +2872,13 @@ def _authenticate_from_cookie():
             display_name = discord_user.get("global_name", "") or username
             avatar_hash = discord_user.get("avatar", "")
             is_admin = discord_user.get("is_admin", False)
+            logger.info(
+                f"_authenticate_from_cookie: Found discord_user in JWT: {username} ({discord_id}), is_admin={is_admin}"
+            )
         else:
+            logger.warning(
+                f"_authenticate_from_cookie: No discord_user in JWT custom claims. custom keys: {list(custom.keys()) if isinstance(custom, dict) else type(custom)}"
+            )
             return None
 
         from models import User
@@ -2974,8 +2981,12 @@ def check_service(service):
     # Admin users API — proxied through health so static pages don't need
     # a Cloudflare Access session for panel.meduseld.io
     if service == "admin-users":
+        logger.info(
+            f"Admin-users request: cookies={list(request.cookies.keys())}, has_CF_Auth={'CF_Authorization' in request.cookies}"
+        )
         user = _authenticate_from_cookie()
         if not user:
+            logger.warning("Admin-users: _authenticate_from_cookie returned None")
             return jsonify({"error": "Authentication required"}), 401
         if user.role != "admin":
             return jsonify({"error": "Insufficient permissions"}), 403
