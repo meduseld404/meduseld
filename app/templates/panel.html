@@ -451,6 +451,9 @@
         statusCard.style.backgroundColor = '#7a6516';
       }
       updateButtonStates(data.state);
+
+      // Re-init tooltips on dynamically rendered badges
+      if (typeof MeduseldTooltips !== 'undefined') MeduseldTooltips.refresh();
     } catch (err) {
       console.error(err);
     }
