@@ -2954,7 +2954,7 @@ def _proxy_microservice(url):
         return jsonify({"error": str(e)}), 502
 
 
-@app.route("/check/<service>", methods=["GET", "POST", "PUT", "OPTIONS"])
+@app.route("/check/<service>", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 def check_service(service):
     """
     Health check endpoint for specific services on health.meduseld.io
@@ -2995,6 +2995,96 @@ def check_service(service):
 
     if service == "history":
         return _proxy_microservice("http://127.0.0.1:5004/history")
+
+    # Calendar API — proxied through health so static pages can manage events
+    # without Cloudflare Access intercepting the request.
+    if service == "calendar" or service.startswith("calendar-"):
+
+        def _cal_cors(resp, status=200):
+            if isinstance(resp, tuple):
+                response = make_response(resp[0], resp[1])
+            else:
+                response = make_response(resp, status)
+            origin = request.headers.get("Origin")
+            if origin and "meduseld.io" in origin:
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+                response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+            return response
+
+        if request.method == "OPTIONS":
+            return _cal_cors("", 204)
+
+        user = _authenticate_from_cookie()
+        if not user:
+            return _cal_cors(jsonify({"error": "Authentication required"}), 401)
+
+        if service == "calendar":
+            # GET = list events, POST = create event (admin only)
+            if request.method == "GET":
+                from models import CalendarEvent
+
+                events = (
+                    CalendarEvent.query.filter(CalendarEvent.event_date >= datetime.utcnow())
+                    .order_by(CalendarEvent.event_date.asc())
+                    .all()
+                )
+                return _cal_cors(
+                    jsonify({"events": [e.to_dict() for e in events]}),
+                    200,
+                )
+
+            if request.method == "POST":
+                if user.role != "admin":
+                    return _cal_cors(jsonify({"error": "Insufficient permissions"}), 403)
+                data = request.get_json()
+                if not data or not data.get("title") or not data.get("event_date"):
+                    return _cal_cors(jsonify({"error": "Title and date required"}), 400)
+                try:
+                    from models import CalendarEvent
+                    from database import db
+
+                    event = CalendarEvent(
+                        title=data["title"],
+                        description=data.get("description", ""),
+                        event_date=datetime.fromisoformat(
+                            data["event_date"].replace("Z", "+00:00")
+                        ),
+                        created_by=user.id,
+                    )
+                    db.session.add(event)
+                    db.session.commit()
+                    logger.info("Admin %s created calendar event: %s", user.username, data["title"])
+                    return _cal_cors(jsonify({"id": event.id}), 201)
+                except Exception as e:
+                    logger.error("Failed to create calendar event: %s", e)
+                    return _cal_cors(jsonify({"error": "Create failed"}), 500)
+
+            return _cal_cors(jsonify({"error": "Method not allowed"}), 405)
+
+        # DELETE /check/calendar-<id>
+        if service.startswith("calendar-"):
+            if user.role != "admin":
+                return _cal_cors(jsonify({"error": "Insufficient permissions"}), 403)
+            try:
+                event_id = int(service.split("calendar-")[1])
+            except (ValueError, IndexError) as e:
+                logger.error("Invalid calendar proxy path: %s", e)
+                return _cal_cors(jsonify({"error": "Invalid event ID"}), 400)
+
+            if request.method == "DELETE":
+                from models import CalendarEvent
+                from database import db
+
+                event = CalendarEvent.query.get(event_id)
+                if not event:
+                    return _cal_cors(jsonify({"error": "Event not found"}), 404)
+                db.session.delete(event)
+                db.session.commit()
+                logger.info("Admin %s deleted calendar event %d", user.username, event_id)
+                return _cal_cors(jsonify({"ok": True}), 200)
+
+            return _cal_cors(jsonify({"error": "Method not allowed"}), 405)
 
     # Admin users API — proxied through health so static pages don't need
     # a Cloudflare Access session for panel.meduseld.io.
