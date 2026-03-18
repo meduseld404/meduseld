@@ -2858,16 +2858,28 @@ def health_check_public():
 def _authenticate_from_cookie():
     """Authenticate a user from the CF_Authorization cookie on public hosts.
     Used by health.meduseld.io proxy routes that need auth but bypass Cloudflare Access.
-    Also checks X-CF-Authorization header as a fallback — the admin page sends the
-    token this way to avoid Cloudflare intercepting requests that carry the cookie.
+    Checks multiple sources for the token:
+    1. CF_Authorization cookie (direct requests)
+    2. X-CF-Authorization header (custom header approach)
+    3. cf_token query parameter (avoids CORS preflight for GET requests)
+    4. _cf_token in JSON body (for PUT/POST requests)
     Returns a User object or None."""
     cf_token = request.cookies.get("CF_Authorization")
     if not cf_token:
-        # Fallback: check custom header (sent by admin page to bypass Cloudflare interception)
         cf_token = request.headers.get("X-CF-Authorization")
     if not cf_token:
+        cf_token = request.args.get("cf_token")
+    if not cf_token:
+        # Check JSON body for _cf_token (used by PUT requests to avoid preflight)
+        try:
+            body = request.get_json(silent=True)
+            if body and isinstance(body, dict):
+                cf_token = body.get("_cf_token")
+        except Exception:
+            pass
+    if not cf_token:
         logger.warning(
-            "_authenticate_from_cookie: No CF_Authorization cookie or X-CF-Authorization header found"
+            "_authenticate_from_cookie: No auth token found in cookie, header, query, or body"
         )
         return None
 
@@ -3001,12 +3013,12 @@ def check_service(service):
 
         # Log what we actually received for debugging
         logger.info(
-            "admin-users auth debug: method=%s, has_cookie=%s, has_header=%s, cookie_keys=%s, x_headers=%s",
+            "admin-users auth debug: method=%s, has_cookie=%s, has_header=%s, has_query=%s, cookie_keys=%s",
             request.method,
             "CF_Authorization" in request.cookies,
             request.headers.get("X-CF-Authorization") is not None,
+            request.args.get("cf_token") is not None,
             list(request.cookies.keys()),
-            [k for k in request.headers.keys() if k.lower().startswith("x-")],
         )
 
         user = _authenticate_from_cookie()
