@@ -372,7 +372,7 @@ Static admin page for managing user roles and account status. Served by Cloudfla
 
 - If the Flask backend is unreachable, the table shows "Backend is offline. Unable to load users."
 - User count badge shows "Backend Offline" in red
-- If Cloudflare Access hasn't established a session for `panel.meduseld.io` (common when signing in via a static site first), shows "Session not established" with a link to open the panel and a Retry button. User count badge shows "Not Connected" in yellow.
+- If Cloudflare Access hasn't established a session for `panel.meduseld.io` (common when signing in via a static site first), the page first attempts a silent session establishment by loading `panel.meduseld.io/health` in a hidden iframe, waits 3 seconds, then auto-retries the fetch. If the retry also fails, shows "Session not established" with a link to open the panel and a Retry button. User count badge shows "Not Connected" in yellow.
 
 ---
 
