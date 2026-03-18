@@ -50,7 +50,9 @@ def add_cors_headers(response):
     if origin and "meduseld.io" in origin:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        response.headers["Access-Control-Allow-Headers"] = (
+            "Content-Type, Authorization, X-CF-Authorization"
+        )
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Max-Age"] = "3600"
     return response
@@ -70,7 +72,9 @@ def cors_preflight(**kwargs):
     if origin and "meduseld.io" in origin:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        response.headers["Access-Control-Allow-Headers"] = (
+            "Content-Type, Authorization, X-CF-Authorization"
+        )
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Max-Age"] = "3600"
     return response
@@ -2854,10 +2858,17 @@ def health_check_public():
 def _authenticate_from_cookie():
     """Authenticate a user from the CF_Authorization cookie on public hosts.
     Used by health.meduseld.io proxy routes that need auth but bypass Cloudflare Access.
+    Also checks X-CF-Authorization header as a fallback — the admin page sends the
+    token this way to avoid Cloudflare intercepting requests that carry the cookie.
     Returns a User object or None."""
     cf_token = request.cookies.get("CF_Authorization")
     if not cf_token:
-        logger.warning("_authenticate_from_cookie: No CF_Authorization cookie found")
+        # Fallback: check custom header (sent by admin page to bypass Cloudflare interception)
+        cf_token = request.headers.get("X-CF-Authorization")
+    if not cf_token:
+        logger.warning(
+            "_authenticate_from_cookie: No CF_Authorization cookie or X-CF-Authorization header found"
+        )
         return None
 
     try:
@@ -2872,13 +2883,8 @@ def _authenticate_from_cookie():
             display_name = discord_user.get("global_name", "") or username
             avatar_hash = discord_user.get("avatar", "")
             is_admin = discord_user.get("is_admin", False)
-            logger.info(
-                f"_authenticate_from_cookie: Found discord_user in JWT: {username} ({discord_id}), is_admin={is_admin}"
-            )
         else:
-            logger.warning(
-                f"_authenticate_from_cookie: No discord_user in JWT custom claims. custom keys: {list(custom.keys()) if isinstance(custom, dict) else type(custom)}"
-            )
+            logger.warning("_authenticate_from_cookie: No discord_user in JWT custom claims")
             return None
 
         from models import User
@@ -2980,31 +2986,42 @@ def check_service(service):
 
     # Admin users API — proxied through health so static pages don't need
     # a Cloudflare Access session for panel.meduseld.io
-    if service == "admin-users":
+    if service == "admin-users" or service.startswith("admin-users-"):
+        # Handle CORS preflight for custom X-CF-Authorization header
+        if request.method == "OPTIONS":
+            response = make_response("", 204)
+            origin = request.headers.get("Origin")
+            if origin and "meduseld.io" in origin:
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Methods"] = "GET, PUT, OPTIONS"
+                response.headers["Access-Control-Allow-Headers"] = (
+                    "Content-Type, X-CF-Authorization"
+                )
+            return response
+
+        # Log what we actually received for debugging
         logger.info(
-            f"Admin-users request: cookies={list(request.cookies.keys())}, has_CF_Auth={'CF_Authorization' in request.cookies}"
+            "admin-users auth debug: method=%s, has_cookie=%s, has_header=%s, cookie_keys=%s, x_headers=%s",
+            request.method,
+            "CF_Authorization" in request.cookies,
+            request.headers.get("X-CF-Authorization") is not None,
+            list(request.cookies.keys()),
+            [k for k in request.headers.keys() if k.lower().startswith("x-")],
         )
-        user = _authenticate_from_cookie()
-        if not user:
-            logger.warning("Admin-users: _authenticate_from_cookie returned None")
-            return jsonify({"error": "Authentication required"}), 401
-        if user.role != "admin":
-            return jsonify({"error": "Insufficient permissions"}), 403
 
-        if request.method == "GET":
-            from models import User as UserModel
-
-            users = UserModel.query.order_by(UserModel.created_at.desc()).all()
-            return jsonify({"users": [u.to_dict() for u in users]}), 200
-
-        return jsonify({"error": "Method not allowed"}), 405
-
-    if service.startswith("admin-users-"):
         user = _authenticate_from_cookie()
         if not user:
             return jsonify({"error": "Authentication required"}), 401
         if user.role != "admin":
             return jsonify({"error": "Insufficient permissions"}), 403
+
+        if service == "admin-users":
+            if request.method == "GET":
+                from models import User as UserModel
+
+                users = UserModel.query.order_by(UserModel.created_at.desc()).all()
+                return jsonify({"users": [u.to_dict() for u in users]}), 200
+            return jsonify({"error": "Method not allowed"}), 405
 
         # Extract user ID from service name: admin-users-<id>
         try:
