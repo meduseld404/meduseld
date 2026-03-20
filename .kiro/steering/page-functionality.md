@@ -55,18 +55,9 @@ Each active service card has a status indicator badge that shows Online/Offline/
      - SSO login page (`/sso-login`): uses an iframe-first approach to avoid a race condition where Jellyfin's ConnectionManager overwrites localStorage credentials. Loads `/web/index.html` in a hidden iframe, polls localStorage every 250ms until Jellyfin initializes `jellyfin_credentials` with `Servers[0].Id`, then patches in `AccessToken`/`UserId` and redirects. Falls back to direct credential write after 15 seconds.
      - Direct visit auto-login: when a user visits `jellyfin.meduseld.io` directly with a valid `CF_Authorization` cookie, an injected script automatically calls `/api/jellyfin-auth`, then polls localStorage waiting for Jellyfin's ConnectionManager to initialize credentials before patching in the auth token. Uses `sessionStorage` flag to prevent retry loops (one attempt per session).
 
-3. **SSH Access** (Admin only — hidden for non-admin users)
-   - Gold "Admin" badge below card title
-   - Status badge: checks SSH health
-   - "Open SSH Terminal" button → links to `https://ssh.meduseld.io` (disabled when offline)
-
-4. **System Monitor** (Admin only — hidden for non-admin users)
-   - Gold "Admin" badge below card title
-   - Always shows "Active" badge (static page, always available)
-   - "Open System Monitor" button → links to `https://system.meduseld.io`
-
 ### Service Cards (Coming Soon — Disabled)
 
+- FellowSync — synchronized music listening ("One does not simply listen alone...")
 - VPN Access — Mullvad remote access
 - Game Wiki — community wiki for current game
 - The Red Book — e-books and audiobooks
@@ -382,6 +373,19 @@ Static admin page for managing user roles and account status. Served by Cloudfla
 - User count badge shows "Backend Offline" in red
 - If the `CF_Authorization` cookie is invalid or expired (401/403), shows "Authentication failed" with a suggestion to log out and back in. User count badge shows "Auth Error" in yellow.
 - API calls are routed through `health.meduseld.io/check/team-roster` to bypass Cloudflare Access session requirements. The endpoint is named "team-roster" instead of "admin-users" to avoid ad-blocker false positives (filter lists block URLs containing "admin"). Auth is handled by reading the `CF_Authorization` cookie via JS and passing its value as a `cf_token` query parameter (GET) or `_cf_token` in the JSON body (PUT). This avoids both Cloudflare cookie interception and CORS preflight issues. Flask's `_authenticate_from_cookie()` decodes the token from cookie, header, query param, or body.
+
+### Admin Tools Section
+
+Below the users table, an "Admin Tools" section displays service cards for admin-only services. These were moved here from the services page since they are only relevant to admins.
+
+1. **SSH Access**
+   - Status badge: checks SSH health via Cloudflare Worker health API (`https://meduseld-health.404-41f.workers.dev`), polls every 5 seconds
+   - Shows Online/Offline/Cloudflare Tunnel Down with color coding (green/red/orange)
+   - "Open SSH Terminal" button → links to `https://ssh.meduseld.io` (disabled when offline)
+
+2. **System Monitor**
+   - Always shows "Online" badge (static page, always available)
+   - "Open System Monitor" button → links to `https://system.meduseld.io`
 
 ---
 
