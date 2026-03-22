@@ -427,7 +427,7 @@ Public landing page for the Herugrim open-source project.
 - Title "Herugrim" and subtitle describing it as a one-click Discord OIDC provider for Cloudflare Access
 - "View on GitHub" button → opens `https://github.com/meduseld-io/herugrim` in new tab
 - "Deploy to Cloudflare Workers" button → opens Cloudflare's one-click deploy flow for the herugrim repo
-- "Contact" button → opens a small centered modal with a mailto link to `404@meduseld.io` for questions, issues, or feedback
+- "Contact" button → opens a small centered modal with a mailto link to `admin@meduseld.io` for questions, issues, or feedback
 - Dark radial gradient background
 - Footer with copyright year (auto-filled via JS), "meduseld.io" link to GitHub org (`https://github.com/meduseld-io`), and dynamic version badge (fetches latest release tag from herugrim GitHub repo, falls back to `v0.1.0-alpha` on error, links to releases page)
 - No authentication required
