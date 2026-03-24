@@ -778,10 +778,10 @@ def _jellyfin_auth_inner(retry=False):
         return jsonify({"error": "Jellyfin server timeout"}), 504
     except requests.RequestException as e:
         logger.error(f"Jellyfin auth error: {e}")
-        return jsonify({"error": "Jellyfin unavailable"}), 503
+        return jsonify({"error": f"Jellyfin unavailable: {e}"}), 503
     except Exception as e:
         logger.error(f"Jellyfin auth unexpected error: {e}")
-        return jsonify({"error": "Internal error"}), 500
+        return jsonify({"error": f"Internal error: {e}"}), 500
 
 
 # ================= ADMIN API =================
@@ -3193,7 +3193,11 @@ def check_service(service):
 
         if request.method == "GET":
             g.user = user
-            result = _jellyfin_auth_inner()
+            try:
+                result = _jellyfin_auth_inner()
+            except Exception as e:
+                logger.error("media-auth: _jellyfin_auth_inner raised: %s", e)
+                return _media_cors(jsonify({"error": f"Internal error: {e}"}), 500)
             if isinstance(result, tuple):
                 return _media_cors(result[0], result[1])
             return _media_cors(result, 200)
