@@ -49,7 +49,7 @@ Each active service card has a status indicator badge that shows Online/Offline/
    - Status badge: checks Jellyfin health via Cloudflare Worker health API, shows Online/Offline/Cloudflare Tunnel Down
    - "Open Edoras" button → opens a modal with options (disabled when offline, links to status page when tunnel is down):
      - "View Library" → calls `/api/jellyfin-auth` to auto-provision a Jellyfin account and get an auth token, then navigates (same tab) to `jellyfin.meduseld.io/sso-login` which sets localStorage credentials and opens Jellyfin logged in. Falls back to navigating to Jellyfin directly if auth fails. Shows "Connecting..." spinner during auth.
-     - "Request" button → links to `https://overseerr.meduseld.io` (opens in new tab)
+     - "Request" button → links to `https://requests.meduseld.io` (opens in new tab)
      - "Manage" button (admin only) → links to `https://edoras.meduseld.io` Edoras management page. Shows gold "Admin" badge.
    - Description: "Stream movies, TV shows, and media from our Edoras server."
    - SSO login page (`/sso-login`): uses an iframe-first approach to avoid a race condition where Jellyfin's ConnectionManager overwrites localStorage credentials. Loads `/web/index.html` in a hidden iframe, polls localStorage every 250ms until Jellyfin initializes `jellyfin_credentials` with `Servers[0].Id`, then patches in `AccessToken`/`UserId` and redirects. Falls back to direct credential write after 15 seconds.
@@ -413,7 +413,7 @@ Admin page for managing entertainment and media services. Non-admin users are re
 
 Each card has an icon, title, description, and "Open" button that opens the service in a new tab.
 
-1. **Overseerr** → `https://overseerr.meduseld.io` — Media request management
+1. **Overseerr** → `https://requests.meduseld.io` — Media request management
 2. **Sonarr** → `https://sonarr.meduseld.io` — TV show management and automation
 3. **Radarr** → `https://radarr.meduseld.io` — Movie management and automation
 4. **Prowlarr** → `https://prowlarr.meduseld.io` — Indexer management for Sonarr and Radarr
