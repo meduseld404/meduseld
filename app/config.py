@@ -55,6 +55,7 @@ ALLOWED_HOSTS = [
     "meduseld.io",
     "panel.meduseld.io",
     "ssh.meduseld.io",
+    "health.meduseld.io",
     "snowmane.meduseld.io",
 ]
 
