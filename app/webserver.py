@@ -4418,8 +4418,6 @@ def check_service(service):
             user = _authenticate_from_cookie()
             if not user:
                 return _picker_cors(jsonify({"error": "Authentication required"}), 401)
-            if user.role != "admin":
-                return _picker_cors(jsonify({"error": "Insufficient permissions"}), 403)
 
             if request.method == "POST":
                 from models import PickerGame
@@ -4437,7 +4435,7 @@ def check_service(service):
                     )
                     db.session.add(game)
                     db.session.commit()
-                    logger.info("Admin %s added picker game: %s", user.username, game.name)
+                    logger.info("User %s added picker game: %s", user.username, game.name)
 
                     # Broadcast pool change
                     try:

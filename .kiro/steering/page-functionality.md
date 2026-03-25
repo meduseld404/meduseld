@@ -589,6 +589,14 @@ Weekly game wheel where users spin to randomly select the party game for the wee
 - Wheel hidden if no games are in the pool
 - Spin POSTs to `https://health.meduseld.io/check/picker-spin` with `{_cf_token}`
 
+### Live Updates (WebSocket)
+
+- Connects to `panel.meduseld.io` on the `/picker` namespace via Socket.IO (no auth required)
+- When any user spins, all other connected viewers see the wheel animate to the winner in real-time via `spin_result` event
+- Game pool changes (add/delete) broadcast `pool_updated` — all viewers reload the game list and wheel
+- History clears broadcast `history_cleared` — all viewers see the banner and history reset
+- The spinner's own animation isn't interrupted (blocked by `isSpinning` flag set before the HTTP call)
+
 ### Past Picks (History)
 
 - List of previous weekly picks showing game name, cover art, week date, and who spun
