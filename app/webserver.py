@@ -146,6 +146,18 @@ from trivia_ws import socketio, register_trivia_rest
 socketio.init_app(app)
 register_trivia_rest(app)
 
+
+# ================= SOCKETIO (Picker Live Updates) =================
+@socketio.on("connect", namespace="/picker")
+def picker_on_connect():
+    logger.info("Picker client connected: %s", request.sid)
+
+
+@socketio.on("disconnect", namespace="/picker")
+def picker_on_disconnect():
+    logger.info("Picker client disconnected: %s", request.sid)
+
+
 # ================= LOGGING =================
 
 # Ensure log directory exists
@@ -4331,6 +4343,23 @@ def check_service(service):
                 db.session.commit()
                 result = WeeklyPick.query.filter_by(week_start=monday).first()
                 logger.info("User %s spun the wheel: %s", user.username, chosen.name)
+
+                # Broadcast spin to all connected picker clients
+                try:
+                    from trivia_ws import socketio
+
+                    pick_data = result.to_dict()
+                    # Include the game index in the active games list for wheel animation
+                    game_ids = [g.id for g in active_games]
+                    winner_index = game_ids.index(chosen.id) if chosen.id in game_ids else 0
+                    socketio.emit(
+                        "spin_result",
+                        {"pick": pick_data, "winner_index": winner_index},
+                        namespace="/picker",
+                    )
+                except Exception as e:
+                    logger.error("Failed to broadcast picker spin: %s", e)
+
                 return _picker_cors(jsonify({"pick": result.to_dict()}), 201)
             except Exception as e:
                 db.session.rollback()
@@ -4359,6 +4388,15 @@ def check_service(service):
                     count = WeeklyPick.query.delete()
                     db.session.commit()
                     logger.info("Admin %s cleared picker history (%d picks)", user.username, count)
+
+                    # Broadcast to all connected picker clients
+                    try:
+                        from trivia_ws import socketio
+
+                        socketio.emit("history_cleared", {}, namespace="/picker")
+                    except Exception as e:
+                        logger.error("Failed to broadcast picker history clear: %s", e)
+
                     return _picker_cors(jsonify({"ok": True, "deleted": count}), 200)
                 except Exception as e:
                     db.session.rollback()
@@ -4400,6 +4438,15 @@ def check_service(service):
                     db.session.add(game)
                     db.session.commit()
                     logger.info("Admin %s added picker game: %s", user.username, game.name)
+
+                    # Broadcast pool change
+                    try:
+                        from trivia_ws import socketio
+
+                        socketio.emit("pool_updated", {}, namespace="/picker")
+                    except Exception as e:
+                        logger.error("Failed to broadcast picker pool update: %s", e)
+
                     return _picker_cors(jsonify({"game": game.to_dict()}), 201)
                 except Exception as e:
                     db.session.rollback()
@@ -4434,6 +4481,15 @@ def check_service(service):
                     game.is_active = False
                     db.session.commit()
                     logger.info("Admin %s removed picker game: %s", user.username, game.name)
+
+                    # Broadcast pool change
+                    try:
+                        from trivia_ws import socketio
+
+                        socketio.emit("pool_updated", {}, namespace="/picker")
+                    except Exception as e:
+                        logger.error("Failed to broadcast picker pool update: %s", e)
+
                     return _picker_cors(jsonify({"ok": True}), 200)
                 except Exception as e:
                     db.session.rollback()
