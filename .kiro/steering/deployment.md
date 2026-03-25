@@ -661,6 +661,7 @@ Events (server → client):
 - `GET /check/picker-current` - (Public) Returns the current week's pick or `{pick: null}` if no spin yet. Week starts Monday 00:00 UTC.
 - `POST /check/picker-spin` - (Authenticated) Spin the wheel. Server randomly selects a game from the active pool. Returns `{pick}`. Rejects with 409 if already spun this week (unless admin, who can re-spin to override). Body: `{_cf_token}`.
 - `GET /check/picker-history` - (Public) Returns last 20 weekly picks, newest first. Response: `{history: [{game_name, game_image, spun_by_name, spun_at, week_start, ...}]}`.
+- `DELETE /check/picker-history` - (Admin only) Deletes all past picks. Auth via `cf_token` query param. Response: `{ok: true, deleted: <count>}`.
 - `GET /check/picker-games` - (Public) Returns all active games in the pool. Response: `{games: [{id, name, image_url, added_by_name, ...}]}`.
 - `POST /check/picker-games` - (Admin only) Add a game to the pool. Body: `{name, image_url?, _cf_token}`.
 - `DELETE /check/picker-games-<id>` - (Admin only) Soft-delete a game from the pool (sets `is_active = false`). Auth via `cf_token` query param.

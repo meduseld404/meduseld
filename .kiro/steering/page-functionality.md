@@ -592,6 +592,7 @@ Weekly game wheel where users spin to randomly select the party game for the wee
 
 - List of previous weekly picks showing game name, cover art, week date, and who spun
 - Fetched from `GET https://health.meduseld.io/check/picker-history` (last 20 picks, newest first)
+- Admins see a "Clear" button (trash icon) that deletes all past picks after confirmation via `DELETE https://health.meduseld.io/check/picker-history`
 
 ### Game Pool
 
