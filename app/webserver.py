@@ -2974,6 +2974,20 @@ def _authenticate_from_cookie():
 def check_achievements(user):
     """Check and award any new achievements for the given user.
     Returns a list of newly unlocked achievement IDs."""
+    from database import db
+
+    try:
+        return _check_achievements_inner(user)
+    except Exception as e:
+        logger.error("Achievement check failed for user %s: %s", user.username, e)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return []
+
+
+def _check_achievements_inner(user):
     from models import (
         UserAchievement,
         TriviaWin,
