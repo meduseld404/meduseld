@@ -82,12 +82,16 @@ Each active service card has a status indicator badge that shows Online/Offline/
    - Description: "Share and control each other's screens for remote collaboration."
    - No status badge (WebRTC peer-to-peer, not health-checked)
 
+8. **Hall of Fame**
+   - "Open Hall of Fame" button → links to `https://fame.meduseld.io`
+   - Description: "Funny moments, clips, and memorable screenshots from our adventures."
+   - No status badge (static page, not health-checked)
+
 ### Service Cards (Coming Soon — Disabled)
 
 - VPN Access — Mullvad remote access
 - Game Wiki — community wiki for current game
 - D&D Companion — session hub, DM soundboard, and campaign wiki for Roll20 adventures
-- Hall of Fame — funny moments and screenshots
 - More Services — placeholder
 
 ### Game News Panel (Collapsible)
@@ -753,6 +757,52 @@ Active Sessions list below:
 - Viewer creates one `RTCPeerConnection` to host, receives SDP offer, sends answer, displays remote stream in video element
 - ICE candidates exchanged via `signal` WebSocket events
 - If users are behind strict NATs/firewalls, a TURN relay server may be needed (not yet configured)
+
+---
+
+## fame.meduseld.io — Hall of Fame (Community Screenshots & Clips)
+
+File: `meduseld-site/fame/index.html`
+
+Community gallery where authenticated users share and vote on gaming moments. Any authenticated user can submit and vote; owners can delete their own entries; admins can delete any entry.
+
+### Navigation
+
+- "Back to Services" button → navigates to `https://services.meduseld.io`
+- Profile widget (top-right, inside header nav bar)
+
+### Submit Entry
+
+- "Submit Entry" button → opens modal (requires authentication)
+- Two tabs: "Upload File" and "Paste Link"
+- Upload tab: title (required), caption (optional), file picker (JPEG, PNG, GIF, WebP up to 10MB; MP4, WebM up to 50MB). Shows preview after file selection.
+- Link tab: title (required), caption (optional), URL (required, supports YouTube/Imgur/direct links), media type dropdown (video or image)
+- Files uploaded to `/srv/media/fame/` on the server, served via `GET /check/fame-media/<filename>`
+- New entries prepended to gallery on success
+
+### Filter & Sort Bar
+
+- Type filters: All, Screenshots (image), Clips (video) — toggle buttons
+- Sort options: Top Rated (by vote count), Newest, Oldest — toggle buttons
+- Filters and sort trigger a fresh gallery load
+
+### Gallery
+
+- Responsive grid (3 columns on desktop, 2 on tablet, 1 on mobile)
+- Each card shows: media (image/video/YouTube embed), title, optional caption, submitter avatar + name, time ago, vote button with count
+- Images: click to open lightbox overlay (full-size, click overlay to close)
+- Videos (non-YouTube): auto-play on hover (muted, looped), click to open lightbox with controls
+- YouTube links: auto-embedded via `youtube-nocookie.com` iframe
+- Delete button (trash icon, top-right): appears on hover, visible only to entry owner or admin. Confirms before deleting.
+- "Load More" button at bottom for pagination (20 entries per page)
+
+### Voting
+
+- Heart icon button on each entry — click to toggle vote (filled = voted, outline = not voted)
+- One vote per user per entry (unique constraint)
+- Vote count updates immediately on toggle
+- POSTs to `https://health.meduseld.io/check/fame-<id>-vote` with `{_cf_token}`
+- Requires authentication
 
 ---
 

@@ -70,6 +70,13 @@ Served via Cloudflare Pages at `/srv/meduseld-site`
   - Sessions are ephemeral (in-memory, 30-minute idle timeout), no DB persistence
   - Session list from `health.meduseld.io/check/remote-sessions`
 
+- **fame.meduseld.io** (fame/index.html)
+  - Hall of Fame — community screenshots & clips gallery
+  - Authenticated users submit entries (file upload or external link), vote on entries
+  - Gallery with filtering (screenshots/clips), sorting (votes/newest/oldest), pagination
+  - File uploads stored at `/srv/media/fame/`, served via `/check/fame-media/<filename>`
+  - Data from `health.meduseld.io/check/fame*` endpoints
+
 ### meduseld Repository (Flask Backend)
 
 Python Flask application at `/srv/meduseld`
@@ -339,6 +346,35 @@ Table: `weekly_picks`
 
 "Week" is defined as Monday 00:00 UTC to Sunday 23:59 UTC. The `week_start` unique constraint ensures only one pick per week. Admins can override by updating the existing row.
 
+### FameEntry Model (`app/models.py`)
+
+Table: `fame_entries`
+
+| Column      | Type        | Notes                                                       |
+| ----------- | ----------- | ----------------------------------------------------------- |
+| id          | Integer     | Primary key                                                 |
+| user_id     | Integer     | FK to `users.id`                                            |
+| title       | String(256) | Entry title                                                 |
+| caption     | Text        | Optional caption/description                                |
+| media_type  | String(16)  | `image` or `video`                                          |
+| source_type | String(16)  | `upload` or `link`                                          |
+| file_path   | String(512) | Server path for uploads (e.g. `/srv/media/fame/<uuid>.jpg`) |
+| url         | String(512) | External URL for link entries                               |
+| vote_count  | Integer     | Denormalized vote count, default 0                          |
+| created_at  | DateTime    | UTC, auto-set on creation                                   |
+
+### FameVote Model (`app/models.py`)
+
+Table: `fame_votes`
+
+| Column   | Type    | Notes                                      |
+| -------- | ------- | ------------------------------------------ |
+| id       | Integer | Primary key                                |
+| user_id  | Integer | FK to `users.id`                           |
+| entry_id | Integer | FK to `fame_entries.id`, CASCADE on delete |
+
+Unique constraint: `(user_id, entry_id)` — one vote per user per entry. Vote count is denormalized on `FameEntry.vote_count` for sort performance.
+
 ### Database Commands
 
 ```bash
@@ -479,6 +515,7 @@ After the first admin is set, subsequent admins can be promoted from the admin p
 ├── games
 │   └── icarus
 ├── media
+│   ├── fame
 │   ├── movies
 │   └── tv
 ├── meduseld
@@ -553,7 +590,7 @@ Three lightweight Python HTTP servers run independently of the Flask app so the 
    - Triggers `meduseld-backup.service` via systemd
    - Env: `BACKUP_SECRET`
 
-Flask proxy routing (`check_service()` in `webserver.py`): requests to `health.meduseld.io/check/stats` → `127.0.0.1:5004/stats`, `/check/history` → `127.0.0.1:5004/history`, `/check/backup` → `127.0.0.1:5003/backup`, `/check/backup-status` → `127.0.0.1:5003/status`, `/check/reboot` → `127.0.0.1:5002/reboot`, `/check/system-logs` → Flask's own `api_server_logs()`, `/check/media-auth` → Jellyfin SSO auth (authenticated, calls `_jellyfin_auth_inner()` to auto-provision and authenticate a Jellyfin account, returns `{token, user_id, server_id}`), `/check/seerr-auth` → Jellyseerr SSO auth (authenticated, provisions Jellyfin account then serves HTML page that POSTs credentials to Jellyseerr from the browser so `connect.sid` is set on the correct domain), `/check/team-roster` → admin users list with trivia stats (authenticated via CF_Authorization JWT passed as `cf_token` query param or `_cf_token` in body; each user includes a `trivia` object with `games_played`, `total_correct`, `total_wrong`, `total_questions`, `best_score`, `accuracy`), `/check/team-roster-<id>` → admin user update (PUT), `/check/calendar` → calendar events list (GET) and create (POST, admin only), `/check/calendar-<id>` → delete calendar event (DELETE, admin only) or edit calendar event (PUT with `title`/`event_date`, admin only) or RSVP (PUT with `status`, any authenticated user), `/check/game-votes` → game voting (GET returns aggregated scores + user's rankings, PUT submits user's ranked list), `/check/games` → games list (GET returns all games, POST adds a game — authenticated), `/check/games-<app_id>` → delete game (DELETE, admin only — also removes associated votes), `/check/trivia-lobbies` → list active multiplayer trivia lobbies (GET, public — returns lobbies with status `waiting`), `/check/trivia-leaderboard` → trivia leaderboard (GET, public — returns aggregated wins per user sorted by win count), `/check/trivia-record-win` → record a trivia game result (POST, authenticated — body: `{score, total_questions, category?, _cf_token}`), `/check/profile` → user profile with achievements and trivia stats (GET, authenticated — runs achievement checks and returns full profile data with all achievements and their locked/unlocked status), `/check/picker-current` → current week's game pick (GET, public), `/check/picker-spin` → spin the wheel to pick a game (POST, authenticated — admins can re-spin), `/check/picker-history` → past weekly picks (GET, public), `/check/picker-games` → game pool list (GET, public) and add game (POST, admin only), `/check/picker-games-<id>` → soft-delete game from pool (DELETE, admin only), `/check/fellowsync-rooms` → FellowSync active rooms (GET, public — proxies to `127.0.0.1:5050/api/rooms/active`, returns `{rooms, count}`, gracefully returns empty list if FellowSync is down), `/check/remote-sessions` → list active remote desktop sessions (GET, public — returns `{sessions}` from in-memory state, cleans up expired sessions on each call). All authenticated endpoints use `_authenticate_from_cookie()` which reads the CF_Authorization JWT from cookie, header, `cf_token` query param, or `_cf_token` in JSON body.
+Flask proxy routing (`check_service()` in `webserver.py`): requests to `health.meduseld.io/check/stats` → `127.0.0.1:5004/stats`, `/check/history` → `127.0.0.1:5004/history`, `/check/backup` → `127.0.0.1:5003/backup`, `/check/backup-status` → `127.0.0.1:5003/status`, `/check/reboot` → `127.0.0.1:5002/reboot`, `/check/system-logs` → Flask's own `api_server_logs()`, `/check/media-auth` → Jellyfin SSO auth (authenticated, calls `_jellyfin_auth_inner()` to auto-provision and authenticate a Jellyfin account, returns `{token, user_id, server_id}`), `/check/seerr-auth` → Jellyseerr SSO auth (authenticated, provisions Jellyfin account then serves HTML page that POSTs credentials to Jellyseerr from the browser so `connect.sid` is set on the correct domain), `/check/team-roster` → admin users list with trivia stats (authenticated via CF_Authorization JWT passed as `cf_token` query param or `_cf_token` in body; each user includes a `trivia` object with `games_played`, `total_correct`, `total_wrong`, `total_questions`, `best_score`, `accuracy`), `/check/team-roster-<id>` → admin user update (PUT), `/check/calendar` → calendar events list (GET) and create (POST, admin only), `/check/calendar-<id>` → delete calendar event (DELETE, admin only) or edit calendar event (PUT with `title`/`event_date`, admin only) or RSVP (PUT with `status`, any authenticated user), `/check/game-votes` → game voting (GET returns aggregated scores + user's rankings, PUT submits user's ranked list), `/check/games` → games list (GET returns all games, POST adds a game — authenticated), `/check/games-<app_id>` → delete game (DELETE, admin only — also removes associated votes), `/check/trivia-lobbies` → list active multiplayer trivia lobbies (GET, public — returns lobbies with status `waiting`), `/check/trivia-leaderboard` → trivia leaderboard (GET, public — returns aggregated wins per user sorted by win count), `/check/trivia-record-win` → record a trivia game result (POST, authenticated — body: `{score, total_questions, category?, _cf_token}`), `/check/profile` → user profile with achievements and trivia stats (GET, authenticated — runs achievement checks and returns full profile data with all achievements and their locked/unlocked status), `/check/picker-current` → current week's game pick (GET, public), `/check/picker-spin` → spin the wheel to pick a game (POST, authenticated — admins can re-spin), `/check/picker-history` → past weekly picks (GET, public), `/check/picker-games` → game pool list (GET, public) and add game (POST, admin only), `/check/picker-games-<id>` → soft-delete game from pool (DELETE, admin only), `/check/fellowsync-rooms` → FellowSync active rooms (GET, public — proxies to `127.0.0.1:5050/api/rooms/active`, returns `{rooms, count}`, gracefully returns empty list if FellowSync is down), `/check/remote-sessions` → list active remote desktop sessions (GET, public — returns `{sessions}` from in-memory state, cleans up expired sessions on each call), `/check/fame` → Hall of Fame entries (GET public with optional auth for vote status, POST authenticated — file upload or JSON link), `/check/fame-<id>` → delete fame entry (DELETE, owner or admin), `/check/fame-<id>-vote` → toggle vote on entry (POST, authenticated), `/check/fame-media/<filename>` → serve uploaded fame media files from `/srv/media/fame/` (GET, public, dedicated Flask route with 24h cache). All authenticated endpoints use `_authenticate_from_cookie()` which reads the CF_Authorization JWT from cookie, header, `cf_token` query param, or `_cf_token` in JSON body.
 
 ### Common Issues
 
@@ -717,6 +754,16 @@ Events (server → client):
 - `signal` — Relayed signaling data. Data: `{from_user_id, signal}`.
 - `control_toggled` — Sent to viewer when control permission changes. Data: `{granted}`.
 - `input_event` — Relayed input from viewer to host. Data: `{from_user_id, event}`.
+
+### Hall of Fame Endpoints (via health proxy)
+
+- `GET /check/fame` - (Public, optional auth for vote status) List fame entries, paginated. Query params: `page` (default 1), `per_page` (default 20, max 50), `sort` (`votes`/`newest`/`oldest`, default `votes`), `type` (`image`/`video`/empty for all). Response: `{entries: [{id, user_id, display_name, avatar_url, title, caption, media_type, source_type, vote_count, created_at, voted, media_url}], total, page, per_page}`. If authenticated, each entry includes `voted` boolean.
+- `POST /check/fame` - (Authenticated) Create a fame entry. Supports two content types:
+  - `multipart/form-data`: file upload with `title`, `caption`, `file` fields. Images (JPEG/PNG/GIF/WebP) up to 10MB, videos (MP4/WebM) up to 50MB. Files saved to `/srv/media/fame/` with UUID filenames.
+  - `application/json`: external link with `{title, url, caption?, media_type?, _cf_token}`. `media_type` defaults to `video`.
+- `DELETE /check/fame-<id>` - (Authenticated) Delete a fame entry. Owner or admin only. Removes associated votes and deletes uploaded file if applicable. Auth via `cf_token` query param.
+- `POST /check/fame-<id>-vote` - (Authenticated) Toggle vote on an entry. Body: `{_cf_token}`. Returns `{voted, vote_count}`. Creates or removes a `FameVote` row and updates the denormalized `vote_count` on `FameEntry`.
+- `GET /check/fame-media/<filename>` - (Public) Dedicated Flask route (not in `check_service`). Serves uploaded fame media files from `/srv/media/fame/`. Returns file with correct MIME type and 24-hour cache header. Returns 404 for missing files or path traversal attempts.
 
 ### Jellyfin Auto-Login
 
