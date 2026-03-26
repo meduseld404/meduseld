@@ -516,3 +516,53 @@ class WeeklyPick(db.Model):
             "spun_at": self.spun_at.isoformat() if self.spun_at else None,
             "week_start": self.week_start.isoformat() if self.week_start else None,
         }
+
+
+class FameEntry(db.Model):
+    __tablename__ = "fame_entries"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    title = db.Column(db.String(256), nullable=False)
+    caption = db.Column(db.Text)
+    media_type = db.Column(db.String(16), nullable=False)  # 'image' or 'video'
+    source_type = db.Column(db.String(16), nullable=False)  # 'upload' or 'link'
+    file_path = db.Column(db.String(512))  # for uploads
+    url = db.Column(db.String(512))  # for external links
+    vote_count = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    creator = db.relationship("User", backref="fame_entries")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "display_name": (
+                (self.creator.display_name or self.creator.username) if self.creator else None
+            ),
+            "avatar_url": self.creator.avatar_url if self.creator else None,
+            "title": self.title,
+            "caption": self.caption,
+            "media_type": self.media_type,
+            "source_type": self.source_type,
+            "file_path": self.file_path,
+            "url": self.url,
+            "vote_count": self.vote_count,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class FameVote(db.Model):
+    __tablename__ = "fame_votes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    entry_id = db.Column(
+        db.Integer, db.ForeignKey("fame_entries.id", ondelete="CASCADE"), nullable=False
+    )
+
+    __table_args__ = (db.UniqueConstraint("user_id", "entry_id", name="uq_fame_vote"),)
+
+    user = db.relationship("User", backref="fame_votes")
+    entry = db.relationship("FameEntry", backref="votes")

@@ -4529,6 +4529,305 @@ def check_service(service):
 
         return _remote_cors(jsonify({"error": "Method not allowed"}), 405)
 
+    # Hall of Fame API — community screenshots & clips gallery
+    if service == "fame" or service.startswith("fame-"):
+
+        FAME_UPLOAD_DIR = "/srv/media/fame"
+        FAME_MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB
+        FAME_MAX_VIDEO_SIZE = 50 * 1024 * 1024  # 50MB
+        FAME_ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+        FAME_ALLOWED_VIDEO_TYPES = {"video/mp4", "video/webm"}
+
+        def _fame_cors(resp, status=200):
+            if isinstance(resp, tuple):
+                response = make_response(resp[0], resp[1])
+            else:
+                response = make_response(resp, status)
+            origin = request.headers.get("Origin")
+            if origin and "meduseld.io" in origin:
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+                response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+            return response
+
+        if request.method == "OPTIONS":
+            return _fame_cors("", 204)
+
+        if service == "fame":
+            # GET /check/fame — list entries (paginated, sortable)
+            if request.method == "GET":
+                from models import FameEntry, FameVote
+                from database import db
+
+                page = request.args.get("page", 1, type=int)
+                per_page = request.args.get("per_page", 20, type=int)
+                per_page = min(per_page, 50)
+                sort = request.args.get("sort", "votes")  # votes, newest, oldest
+                filter_type = request.args.get("type", "")  # image, video, or empty
+
+                query = FameEntry.query
+                if filter_type in ("image", "video"):
+                    query = query.filter_by(media_type=filter_type)
+
+                if sort == "newest":
+                    query = query.order_by(FameEntry.created_at.desc())
+                elif sort == "oldest":
+                    query = query.order_by(FameEntry.created_at.asc())
+                else:
+                    query = query.order_by(FameEntry.vote_count.desc(), FameEntry.created_at.desc())
+
+                total = query.count()
+                entries = query.offset((page - 1) * per_page).limit(per_page).all()
+
+                # Check which entries the current user has voted on
+                voted_ids = set()
+                user = _authenticate_from_cookie()
+                if user:
+                    user_votes = FameVote.query.filter(
+                        FameVote.user_id == user.id,
+                        FameVote.entry_id.in_([e.id for e in entries]),
+                    ).all()
+                    voted_ids = {v.entry_id for v in user_votes}
+
+                result = []
+                for e in entries:
+                    d = e.to_dict()
+                    d["voted"] = e.id in voted_ids
+                    # Build media URL for uploads
+                    if e.source_type == "upload" and e.file_path:
+                        d["media_url"] = (
+                            "https://health.meduseld.io/check/fame-media/"
+                            + os.path.basename(e.file_path)
+                        )
+                    else:
+                        d["media_url"] = e.url
+                    result.append(d)
+
+                return _fame_cors(
+                    jsonify(
+                        {"entries": result, "total": total, "page": page, "per_page": per_page}
+                    ),
+                    200,
+                )
+
+            # POST /check/fame — create entry (file upload or URL)
+            if request.method == "POST":
+                user = _authenticate_from_cookie()
+                if not user:
+                    return _fame_cors(jsonify({"error": "Authentication required"}), 401)
+
+                # Check if it's a file upload (multipart) or JSON (link)
+                if request.content_type and "multipart/form-data" in request.content_type:
+                    title = request.form.get("title", "").strip()
+                    caption = request.form.get("caption", "").strip()
+                    file = request.files.get("file")
+
+                    if not title:
+                        return _fame_cors(jsonify({"error": "Title required"}), 400)
+                    if not file:
+                        return _fame_cors(jsonify({"error": "File required"}), 400)
+
+                    content_type = file.content_type or ""
+                    if content_type in FAME_ALLOWED_IMAGE_TYPES:
+                        media_type = "image"
+                        max_size = FAME_MAX_IMAGE_SIZE
+                    elif content_type in FAME_ALLOWED_VIDEO_TYPES:
+                        media_type = "video"
+                        max_size = FAME_MAX_VIDEO_SIZE
+                    else:
+                        return _fame_cors(
+                            jsonify(
+                                {
+                                    "error": "Unsupported file type. Use JPEG, PNG, GIF, WebP, MP4, or WebM."
+                                }
+                            ),
+                            400,
+                        )
+
+                    # Read file and check size
+                    file_data = file.read()
+                    if len(file_data) > max_size:
+                        limit_mb = max_size // (1024 * 1024)
+                        return _fame_cors(
+                            jsonify(
+                                {"error": f"File too large. Max {limit_mb}MB for {media_type}s."}
+                            ),
+                            400,
+                        )
+
+                    # Save file
+                    try:
+                        os.makedirs(FAME_UPLOAD_DIR, exist_ok=True)
+                        import uuid as _uuid
+
+                        ext = os.path.splitext(file.filename or "")[1] or (
+                            ".jpg" if media_type == "image" else ".mp4"
+                        )
+                        filename = f"{_uuid.uuid4().hex}{ext}"
+                        filepath = os.path.join(FAME_UPLOAD_DIR, filename)
+                        with open(filepath, "wb") as f:
+                            f.write(file_data)
+                    except Exception as e:
+                        logger.error("Failed to save fame upload: %s", e)
+                        return _fame_cors(jsonify({"error": "File save failed"}), 500)
+
+                    from models import FameEntry
+                    from database import db
+
+                    try:
+                        entry = FameEntry(
+                            user_id=user.id,
+                            title=title,
+                            caption=caption or None,
+                            media_type=media_type,
+                            source_type="upload",
+                            file_path=filepath,
+                        )
+                        db.session.add(entry)
+                        db.session.commit()
+                        logger.info("User %s uploaded fame entry: %s", user.username, title)
+                        d = entry.to_dict()
+                        d["voted"] = False
+                        d["media_url"] = "https://health.meduseld.io/check/fame-media/" + filename
+                        return _fame_cors(jsonify({"entry": d}), 201)
+                    except Exception as e:
+                        db.session.rollback()
+                        logger.error("Failed to create fame entry: %s", e)
+                        return _fame_cors(jsonify({"error": "Create failed"}), 500)
+
+                else:
+                    # JSON body — external link
+                    data = request.get_json()
+                    if not data or not data.get("title") or not data.get("url"):
+                        return _fame_cors(jsonify({"error": "title and url required"}), 400)
+
+                    title = data["title"].strip()
+                    url = data["url"].strip()
+                    caption = data.get("caption", "").strip()
+                    media_type = data.get("media_type", "video")
+                    if media_type not in ("image", "video"):
+                        media_type = "video"
+
+                    from models import FameEntry
+                    from database import db
+
+                    try:
+                        entry = FameEntry(
+                            user_id=user.id,
+                            title=title,
+                            caption=caption or None,
+                            media_type=media_type,
+                            source_type="link",
+                            url=url,
+                        )
+                        db.session.add(entry)
+                        db.session.commit()
+                        logger.info("User %s added fame link: %s", user.username, title)
+                        d = entry.to_dict()
+                        d["voted"] = False
+                        d["media_url"] = url
+                        return _fame_cors(jsonify({"entry": d}), 201)
+                    except Exception as e:
+                        db.session.rollback()
+                        logger.error("Failed to create fame link entry: %s", e)
+                        return _fame_cors(jsonify({"error": "Create failed"}), 500)
+
+            return _fame_cors(jsonify({"error": "Method not allowed"}), 405)
+
+        # DELETE /check/fame-<id> — delete entry (owner or admin)
+        if (
+            service.startswith("fame-")
+            and service != "fame-media"
+            and not service.startswith("fame-media/")
+        ):
+            # Vote toggle: POST /check/fame-<id>-vote
+            if service.endswith("-vote"):
+                try:
+                    entry_id = int(service.replace("-vote", "").split("fame-")[1])
+                except (ValueError, IndexError) as e:
+                    logger.error("Invalid fame vote path: %s", e)
+                    return _fame_cors(jsonify({"error": "Invalid entry ID"}), 400)
+
+                if request.method != "POST":
+                    return _fame_cors(jsonify({"error": "Method not allowed"}), 405)
+
+                user = _authenticate_from_cookie()
+                if not user:
+                    return _fame_cors(jsonify({"error": "Authentication required"}), 401)
+
+                from models import FameEntry, FameVote
+                from database import db
+
+                entry = FameEntry.query.get(entry_id)
+                if not entry:
+                    return _fame_cors(jsonify({"error": "Entry not found"}), 404)
+
+                existing = FameVote.query.filter_by(user_id=user.id, entry_id=entry_id).first()
+                try:
+                    if existing:
+                        db.session.delete(existing)
+                        entry.vote_count = max(0, entry.vote_count - 1)
+                        db.session.commit()
+                        return _fame_cors(
+                            jsonify({"voted": False, "vote_count": entry.vote_count}), 200
+                        )
+                    else:
+                        vote = FameVote(user_id=user.id, entry_id=entry_id)
+                        db.session.add(vote)
+                        entry.vote_count = entry.vote_count + 1
+                        db.session.commit()
+                        return _fame_cors(
+                            jsonify({"voted": True, "vote_count": entry.vote_count}), 200
+                        )
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to toggle fame vote: %s", e)
+                    return _fame_cors(jsonify({"error": "Vote failed"}), 500)
+
+            # DELETE /check/fame-<id>
+            try:
+                entry_id = int(service.split("fame-")[1])
+            except (ValueError, IndexError) as e:
+                logger.error("Invalid fame delete path: %s", e)
+                return _fame_cors(jsonify({"error": "Invalid entry ID"}), 400)
+
+            if request.method != "DELETE":
+                return _fame_cors(jsonify({"error": "Method not allowed"}), 405)
+
+            user = _authenticate_from_cookie()
+            if not user:
+                return _fame_cors(jsonify({"error": "Authentication required"}), 401)
+
+            from models import FameEntry, FameVote
+            from database import db
+
+            entry = FameEntry.query.get(entry_id)
+            if not entry:
+                return _fame_cors(jsonify({"error": "Entry not found"}), 404)
+
+            # Owner or admin can delete
+            if entry.user_id != user.id and user.role != "admin":
+                return _fame_cors(jsonify({"error": "Insufficient permissions"}), 403)
+
+            try:
+                # Delete file if it was an upload
+                if entry.source_type == "upload" and entry.file_path:
+                    try:
+                        os.remove(entry.file_path)
+                    except OSError as e:
+                        logger.error("Failed to delete fame file %s: %s", entry.file_path, e)
+
+                FameVote.query.filter_by(entry_id=entry_id).delete()
+                db.session.delete(entry)
+                db.session.commit()
+                logger.info("User %s deleted fame entry %d", user.username, entry_id)
+                return _fame_cors(jsonify({"ok": True}), 200)
+            except Exception as e:
+                db.session.rollback()
+                logger.error("Failed to delete fame entry: %s", e)
+                return _fame_cors(jsonify({"error": "Delete failed"}), 500)
+
     # FellowSync active rooms — public, no auth needed
     if service == "fellowsync-rooms":
 
@@ -4570,6 +4869,39 @@ def check_service(service):
             return jsonify({"status": "error", "code": response.status_code}), 502
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 502
+
+
+# ================= FAME MEDIA =================
+
+
+@app.route("/check/fame-media/<filename>", methods=["GET", "OPTIONS"])
+def serve_fame_media(filename):
+    """Serve uploaded fame media files from /srv/media/fame/"""
+    host = request.host.split(":")[0]
+    if host != "health.meduseld.io":
+        abort(404)
+
+    if not filename or "/" in filename or ".." in filename:
+        abort(404)
+
+    filepath = os.path.join("/srv/media/fame", filename)
+    if not os.path.isfile(filepath):
+        abort(404)
+
+    import mimetypes
+
+    mime = mimetypes.guess_type(filepath)[0] or "application/octet-stream"
+    try:
+        with open(filepath, "rb") as f:
+            data = f.read()
+        resp = make_response(data)
+        resp.headers["Content-Type"] = mime
+        resp.headers["Cache-Control"] = "public, max-age=86400"
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp
+    except Exception as e:
+        logger.error("Failed to serve fame media %s: %s", filename, e)
+        abort(500)
 
 
 # ================= JELLYFIN PROXY =================
