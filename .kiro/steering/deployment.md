@@ -684,7 +684,7 @@ Events (server → client):
 
 ### Remote Desktop WebSocket (Flask-SocketIO)
 
-Namespace: `/remote` on `panel.meduseld.io`. All session state is held in-memory (`remote_ws.remote_sessions` dict); nothing is persisted to the database. Sessions auto-expire after 30 minutes of inactivity.
+Namespace: `/remote` on `health.meduseld.io` (same Flask app as `panel.meduseld.io`, but without Cloudflare Access protection — avoids cross-origin session issues). All session state is held in-memory (`remote_ws.remote_sessions` dict); nothing is persisted to the database. Sessions auto-expire after 30 minutes of inactivity.
 
 Module: `app/remote_ws.py` — all signaling logic is isolated here. Event handlers are registered via `register_remote_ws(socketio)` called from `webserver.py`.
 

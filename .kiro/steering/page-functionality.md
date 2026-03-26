@@ -739,11 +739,12 @@ Active Sessions list below:
 
 ### WebSocket Connection
 
-- Connects to `panel.meduseld.io` on the `/remote` namespace via Socket.IO
+- Connects to `health.meduseld.io` on the `/remote` namespace via Socket.IO
 - Auth: passes `CF_Authorization` cookie value as `token` query parameter
 - Server authenticates by decoding the JWT and looking up the user by Discord ID
 - On connect, server emits `welcome` with `{user_id}` (DB user ID)
-- Transports: WebSocket with polling fallback
+- Transports: polling first, then WebSocket upgrade
+- Uses `health.meduseld.io` instead of `panel.meduseld.io` to avoid Cloudflare Access cross-origin session issues (health host has no Access protection; auth is handled via the JWT token in the query string)
 
 ### WebRTC
 
