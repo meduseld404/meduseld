@@ -380,12 +380,17 @@ def _advance_question(code):
         lobby.question_revealed = False
 
         if lobby.current_question >= len(lobby.questions):
-            _end_game(code)
-            return
+            # Don't call _end_game inside the lock — it does DB ops and socketio emits
+            pass
+        else:
+            q = lobby.questions[lobby.current_question]
+            q_data = _prepare_question(q, lobby.current_question)
+            lobby.question_deadline = datetime.now(timezone.utc).timestamp() + QUESTION_TIME_SECONDS
 
-        q = lobby.questions[lobby.current_question]
-        q_data = _prepare_question(q, lobby.current_question)
-        lobby.question_deadline = datetime.now(timezone.utc).timestamp() + QUESTION_TIME_SECONDS
+    # Check if game is over (outside the lock)
+    if lobby.current_question >= len(lobby.questions):
+        _end_game(code)
+        return
 
     socketio.emit(
         "question",
@@ -518,6 +523,7 @@ def _end_game(code):
         from database import db
 
         cat_name = lobby.settings.get("category_name", "")
+        persisted = 0
         for uid, p in lobby.players.items():
             if not p["connected"] and p["score"] == 0:
                 continue  # Skip fully disconnected players with no score
@@ -528,8 +534,9 @@ def _end_game(code):
                 category=cat_name,
             )
             db.session.add(win)
+            persisted += 1
         db.session.commit()
-        logger.info("Persisted trivia results for lobby %s (%d players)", code, len(lobby.players))
+        logger.info("Persisted %d trivia results for lobby %s", persisted, code)
     except Exception as e:
         logger.error("Failed to persist trivia results for lobby %s: %s", code, e)
         try:
