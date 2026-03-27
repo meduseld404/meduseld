@@ -675,6 +675,7 @@ Events (client → server):
 - `submit_answer` — Submit answer for current question. Data: `{code, answer}`. When all players answer (or 20s timer expires), server reveals answer and advances.
 - `kick_player` — Host-only, waiting state only. Data: `{code, user_id}`. Removes player from lobby.
 - `end_game` — Host-only, playing/countdown states. Data: `{code}`. Ends the game early without persisting any `TriviaWin` rows.
+- `play_again` — Host-only, results state. Data: `{code, settings?}`. Resets the lobby to waiting state with optional new settings (`num_questions`, `difficulty`, `category`, `category_name`, `max_players`). Clears scores/answers, removes disconnected players, cancels pending cleanup. Emits `lobby_reset` to all players.
 
 Events (server → client):
 
@@ -689,6 +690,7 @@ Events (server → client):
 - `answer_reveal` — Correct answer + per-player results. Data: `{correct_answer, player_results, question_index}`.
 - `game_over` — Final standings. Data: `{standings}`. Server persists all player results as `TriviaWin` rows.
 - `game_aborted` — Game ended early by host. Data: `{standings}`. No stats persisted.
+- `lobby_reset` — Lobby reset for play again. Data: `{lobby}`. Sent to all players when host triggers `play_again`. Lobby returns to waiting state with updated settings.
 
 ### Profile & Achievements Endpoint (via health proxy)
 
