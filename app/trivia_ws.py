@@ -391,6 +391,7 @@ def _advance_question(code):
             "time_limit": QUESTION_TIME_SECONDS,
         },
         room=code,
+        namespace="/trivia",
     )
 
     # Schedule auto-advance when time runs out
@@ -467,6 +468,7 @@ def _reveal_and_advance(code):
             "question_index": lobby.current_question,
         },
         room=code,
+        namespace="/trivia",
     )
 
     # Pause then advance
@@ -542,7 +544,7 @@ def _end_game(code):
     except Exception as e:
         logger.error("Failed to update lobby status for %s: %s", code, e)
 
-    socketio.emit("game_over", {"standings": standings}, room=code)
+    socketio.emit("game_over", {"standings": standings}, room=code, namespace="/trivia")
 
     # Clean up in-memory state after a delay
     socketio.start_background_task(_cleanup_lobby, code)
@@ -590,7 +592,7 @@ def _abort_game(code):
     except Exception as e:
         logger.error("Failed to update lobby status for aborted game %s: %s", code, e)
 
-    socketio.emit("game_aborted", {"standings": standings}, room=code)
+    socketio.emit("game_aborted", {"standings": standings}, room=code, namespace="/trivia")
     logger.info("Game aborted in lobby %s by host", code)
 
     socketio.start_background_task(_cleanup_lobby, code)
@@ -636,6 +638,7 @@ def on_disconnect():
                     "lobby": lobby.to_dict(),
                 },
                 room=code,
+                namespace="/trivia",
             )
 
             # If host left during waiting, close the lobby
@@ -661,7 +664,7 @@ def _close_lobby(code, reason="Lobby closed"):
     if not lobby:
         return
 
-    socketio.emit("lobby_closed", {"reason": reason}, room=code)
+    socketio.emit("lobby_closed", {"reason": reason}, room=code, namespace="/trivia")
 
     # Update DB
     try:
@@ -802,6 +805,7 @@ def on_join_lobby(data):
         },
         room=code,
         skip_sid=request.sid,
+        namespace="/trivia",
     )
 
     logger.info("%s joined lobby %s", user.username, code)
@@ -835,6 +839,7 @@ def on_leave_lobby(data):
             "lobby": lobby.to_dict(),
         },
         room=code,
+        namespace="/trivia",
     )
 
 
@@ -889,6 +894,7 @@ def on_start_game(data):
             "total_questions": len(questions),
         },
         room=code,
+        namespace="/trivia",
     )
 
     # Start countdown then first question
@@ -953,6 +959,7 @@ def on_submit_answer(data):
             "lobby": lobby.to_dict(),
         },
         room=code,
+        namespace="/trivia",
     )
 
     # If all connected players have answered, reveal immediately
@@ -986,7 +993,10 @@ def on_kick_player(data):
         # Notify the kicked player
         if kicked.get("sid"):
             socketio.emit(
-                "kicked", {"reason": "You were removed from the lobby"}, room=kicked["sid"]
+                "kicked",
+                {"reason": "You were removed from the lobby"},
+                room=kicked["sid"],
+                namespace="/trivia",
             )
         socketio.emit(
             "player_left",
@@ -996,6 +1006,7 @@ def on_kick_player(data):
                 "lobby": lobby.to_dict(),
             },
             room=code,
+            namespace="/trivia",
         )
 
 
