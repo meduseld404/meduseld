@@ -46,6 +46,9 @@ class LobbyState:
         self.question_deadline = None  # timestamp when current question expires
         self.question_revealed = False  # guard against double reveal
         self._cleanup_pending = False  # set True when game ends, cancelled by play_again
+        self.sudden_death = False  # True when in sudden death tiebreaker
+        self.sudden_death_players = []  # user_ids of tied players in sudden death
+        self.sudden_death_round = 0  # which sudden death question we're on
         self.lock = threading.Lock()
 
         # Add host as first player
@@ -90,6 +93,8 @@ class LobbyState:
             ),
             "host_user_id": self.host_user_id,
             "host_name": self.players.get(self.host_user_id, {}).get("display_name", "Host"),
+            "sudden_death": self.sudden_death,
+            "sudden_death_players": self.sudden_death_players,
         }
 
 
@@ -421,9 +426,14 @@ def _question_timeout(code, question_index):
 
 
 def _all_answered(lobby):
-    """Check if all connected players have answered the current question."""
-    for p in lobby.players.values():
-        if p["connected"] and len(p["answers"]) <= lobby.current_question:
+    """Check if all relevant players have answered the current question."""
+    for uid, p in lobby.players.items():
+        if not p["connected"]:
+            continue
+        # During sudden death, only check the dueling players
+        if lobby.sudden_death and uid not in lobby.sudden_death_players:
+            continue
+        if len(p["answers"]) <= lobby.current_question:
             return False
     return True
 
@@ -484,6 +494,21 @@ def _reveal_and_advance(code):
         namespace="/trivia",
     )
 
+    # During sudden death, check if someone got eliminated
+    if lobby.sudden_death:
+        if _check_sudden_death_result(code, player_results):
+            # Someone was eliminated — end the game after a pause
+            socketio.start_background_task(_delayed_finalize, code)
+            return
+        # Everyone got it right or everyone got it wrong — continue
+        lobby.sudden_death_round += 1
+        # Check if we've run out of sudden death questions
+        if lobby.current_question + 1 >= len(lobby.questions):
+            # Ran out of questions, end as a draw
+            lobby.sudden_death = False
+            socketio.start_background_task(_delayed_finalize, code)
+            return
+
     # Pause then advance
     socketio.start_background_task(_delayed_advance, code)
 
@@ -494,8 +519,140 @@ def _delayed_advance(code):
     _advance_question(code)
 
 
+def _delayed_finalize(code):
+    """Wait then finalize the game (used after sudden death resolution)."""
+    socketio.sleep(RESULTS_PAUSE_SECONDS)
+    _finalize_game(code)
+
+
 def _end_game(code):
-    """End the game, persist results, emit final scores."""
+    """End the game, persist results, emit final scores. If top players are tied, enter sudden death."""
+    lobby = lobby_games.get(code)
+    if not lobby:
+        return
+
+    # Check for tie at the top (only if not already in sudden death that resolved)
+    if not lobby.sudden_death:
+        scores = {}
+        for uid, p in lobby.players.items():
+            if p["connected"] or p["score"] > 0:
+                scores[uid] = p["score"]
+        if scores:
+            top_score = max(scores.values())
+            tied = [uid for uid, s in scores.items() if s == top_score]
+            if len(tied) >= 2:
+                _start_sudden_death(code, tied)
+                return
+
+    _finalize_game(code)
+
+
+def _start_sudden_death(code, tied_player_ids):
+    """Enter sudden death mode for tied players."""
+    lobby = lobby_games.get(code)
+    if not lobby:
+        return
+
+    lobby.sudden_death = True
+    lobby.sudden_death_players = tied_player_ids
+    lobby.sudden_death_round = 0
+
+    tied_names = [
+        lobby.players[uid]["display_name"]
+        for uid in tied_player_ids
+        if uid in lobby.players
+    ]
+    logger.info(
+        "Sudden death in lobby %s between %s (score: %d)",
+        code,
+        ", ".join(tied_names),
+        lobby.players[tied_player_ids[0]]["score"],
+    )
+
+    socketio.emit(
+        "sudden_death",
+        {
+            "players": [
+                {
+                    "user_id": uid,
+                    "display_name": lobby.players[uid]["display_name"],
+                    "avatar_url": lobby.players[uid].get("avatar_url"),
+                }
+                for uid in tied_player_ids
+                if uid in lobby.players
+            ],
+            "score": lobby.players[tied_player_ids[0]]["score"],
+        },
+        room=code,
+        namespace="/trivia",
+    )
+
+    # Fetch sudden death questions and start after a pause
+    socketio.start_background_task(_sudden_death_start, code)
+
+
+def _sudden_death_start(code):
+    """Fetch questions for sudden death and start the first round."""
+    socketio.sleep(4)  # Dramatic pause for the announcement
+    lobby = lobby_games.get(code)
+    if not lobby or not lobby.sudden_death:
+        return
+
+    # Fetch extra questions for sudden death (up to 10 rounds max)
+    sd_settings = dict(lobby.settings)
+    sd_settings["num_questions"] = 10
+    extra_qs = _fetch_questions(sd_settings)
+    if not extra_qs:
+        # Fallback: can't fetch more questions, just end the game as-is
+        logger.warning("Could not fetch sudden death questions for lobby %s, ending game", code)
+        lobby.sudden_death = False
+        _finalize_game(code)
+        return
+
+    # Append sudden death questions to the existing list
+    lobby.questions.extend(extra_qs)
+    lobby.status = "playing"
+
+    _advance_question(code)
+
+
+def _check_sudden_death_result(code, player_results):
+    """After a sudden death reveal, check if anyone got eliminated.
+    Returns True if sudden death is resolved (game should end), False to continue."""
+    lobby = lobby_games.get(code)
+    if not lobby or not lobby.sudden_death:
+        return False
+
+    # Check results for the sudden death players only
+    sd_results = {}
+    for pr in player_results:
+        if pr["user_id"] in lobby.sudden_death_players:
+            sd_results[pr["user_id"]] = pr["correct"]
+
+    got_right = [uid for uid, correct in sd_results.items() if correct]
+    got_wrong = [uid for uid, correct in sd_results.items() if not correct]
+
+    if len(got_right) == 0:
+        # Everyone got it wrong — continue sudden death, no elimination
+        return False
+
+    if len(got_wrong) == 0:
+        # Everyone got it right — continue sudden death
+        return False
+
+    # Some got it right, some got it wrong — eliminate the wrong ones
+    # Award +1 to survivors so they pull ahead in the standings
+    for uid in got_right:
+        if uid in lobby.players:
+            lobby.players[uid]["score"] += 1
+
+    # End sudden death — the remaining players won
+    lobby.sudden_death = False
+    return True
+
+
+def _finalize_game(code):
+    """Persist results and emit final scores."""
     lobby = lobby_games.get(code)
     if not lobby:
         return
@@ -970,8 +1127,8 @@ def on_submit_answer(data):
     is_flag = lobby.questions[qi].get("type") == "flags"
     is_correct = _check_flag_answer(answer, correct_answer) if is_flag else answer == correct_answer
 
-    if is_correct:
-        # Bonus points for speed (if answered before deadline)
+    # During sudden death, only dueling players' answers count for scoring
+    if is_correct and (not lobby.sudden_death or user.id in lobby.sudden_death_players):
         player["score"] += 1
 
     player["answers"].append(answer)
@@ -1091,6 +1248,9 @@ def on_play_again(data):
     lobby.question_timer = None
     lobby.question_deadline = None
     lobby.question_revealed = False
+    lobby.sudden_death = False
+    lobby.sudden_death_players = []
+    lobby.sudden_death_round = 0
 
     # Reset player scores and answers, keep connected players
     for uid, p in list(lobby.players.items()):
