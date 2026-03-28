@@ -2,7 +2,6 @@
 # Auto-detects environment: production (Ubuntu server) or development (local machine)
 
 import os
-import platform
 
 # ================= ENVIRONMENT DETECTION =================
 # Check if we're on the production server

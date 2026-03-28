@@ -174,7 +174,7 @@ def picker_on_disconnect():
 
 
 # ================= SOCKETIO (Remote Desktop Signaling) =================
-from remote_ws import register_remote_ws, remote_sessions, cleanup_expired_sessions
+from remote_ws import register_remote_ws
 
 register_remote_ws(socketio)
 
