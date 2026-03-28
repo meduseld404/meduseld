@@ -407,6 +407,7 @@ Table: `dnd_links`
 | label       | String(128) | Link display label                            |
 | url         | String(512) | Link URL                                      |
 | icon        | String(64)  | Bootstrap icon class, default `bi-link-45deg` |
+| image_url   | String(512) | Optional cover image URL (overrides icon)     |
 | description | String(256) | Optional description                          |
 | sort_order  | Integer     | Display order, default 0                      |
 | created_by  | Integer     | FK to `users.id`                              |

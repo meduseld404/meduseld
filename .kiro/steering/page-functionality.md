@@ -863,10 +863,10 @@ Session hub, DM soundboard, and campaign wiki for D&D sessions. Any authenticate
 ### Session Links Panel
 
 - Displays admin-configured quick-launch links as a grid of clickable cards (e.g. Roll20, D&D Beyond, Discord voice channel)
-- Each link card shows icon, label, optional description, and opens URL in new tab
+- Each link card shows icon, label, optional description, and opens URL in new tab. If an image URL is set, it displays as a cover image at the top of the card instead of the icon.
 - Admin sees "+" button to add links, edit (pencil) and delete (trash) buttons on each link
 - Links stored in DB (`dnd_links` table), ordered by `sort_order`
-- Add/Edit modal: label, URL, Bootstrap icon class, description, sort order
+- Add/Edit modal: label, URL, Bootstrap icon class, image URL (optional, overrides icon), description, sort order
 - Data from `GET https://health.meduseld.io/check/dnd-links`
 
 ### Party Roster
