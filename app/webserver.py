@@ -817,10 +817,10 @@ def _jellyfin_auth_inner(retry=False):
         return jsonify({"error": "Jellyfin server timeout"}), 504
     except requests.RequestException as e:
         logger.error(f"Jellyfin auth error: {e}")
-        return jsonify({"error": f"Jellyfin unavailable: {e}"}), 503
+        return jsonify({"error": "Jellyfin unavailable"}), 503
     except Exception as e:
         logger.error(f"Jellyfin auth unexpected error: {e}")
-        return jsonify({"error": f"Internal error: {e}"}), 500
+        return jsonify({"error": "Internal error"}), 500
 
 
 # ================= ADMIN API =================
@@ -1893,7 +1893,7 @@ def jellyfin_proxy(path=""):
         return "Jellyfin server timeout", 504
     except Exception as e:
         logger.error(f"Error proxying to Jellyfin: {e}")
-        return f"Jellyfin unavailable: {e}", 503
+        return "Jellyfin unavailable", 503
 
 
 @app.route("/", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
@@ -2570,7 +2570,7 @@ def api_startup_logs():
         return jsonify({"logs": lines})
     except Exception as e:
         logger.error(f"Error reading startup log: {e}")
-        return jsonify({"logs": [f"[ERROR] Failed to read startup log: {e}"]})
+        return jsonify({"logs": ["[ERROR] Failed to read startup log"]})
 
 
 @app.route("/api/clear-startup-logs", methods=["POST"])
@@ -2634,7 +2634,7 @@ def download_backup():
         )
     except Exception as e:
         logger.error(f"Error downloading backup: {e}")
-        return make_response(f"Error downloading backup: {e}", 500)
+        return make_response("Error downloading backup", 500)
 
 
 # ================= GOOGLE DRIVE BACKUP =================
@@ -2741,7 +2741,7 @@ def google_oauth():
         return redirect(authorization_url)
     except Exception as e:
         logger.error(f"Error starting OAuth flow: {e}")
-        return make_response(f"Error starting OAuth: {e}", 500)
+        return make_response("Error starting OAuth", 500)
 
 
 @app.route("/oauth2callback")
@@ -2779,7 +2779,7 @@ def oauth2callback():
         return redirect(url_for("upload_to_drive"))
     except Exception as e:
         logger.error(f"Error in OAuth callback: {e}")
-        return make_response(f"Error completing OAuth: {e}", 500)
+        return make_response("Error completing OAuth", 500)
 
 
 @app.route("/upload-to-drive")
@@ -2880,7 +2880,7 @@ def upload_to_drive():
         """
     except Exception as e:
         logger.error(f"Error uploading to Google Drive: {e}")
-        return make_response(f"Error uploading to Google Drive: {e}", 500)
+        return make_response("Error uploading to Google Drive", 500)
 
 
 @app.route("/api/server-logs")
@@ -3455,7 +3455,7 @@ def check_service(service):
                 result = _jellyfin_auth_inner()
             except Exception as e:
                 logger.error("media-auth: _jellyfin_auth_inner raised: %s", e)
-                return _media_cors(jsonify({"error": f"Internal error: {e}"}), 500)
+                return _media_cors(jsonify({"error": "Internal error"}), 500)
             if isinstance(result, tuple):
                 return _media_cors(result[0], result[1])
             return _media_cors(result, 200)
