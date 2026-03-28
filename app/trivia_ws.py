@@ -613,6 +613,11 @@ def _sudden_death_start(code):
     lobby.questions.extend(extra_qs)
     lobby.status = "playing"
 
+    # current_question is already past the last regular question (== original length).
+    # _advance_question increments before emitting, so step back by one so the
+    # first sudden death question (at the old length index) isn't skipped.
+    lobby.current_question -= 1
+
     _advance_question(code)
 
 
