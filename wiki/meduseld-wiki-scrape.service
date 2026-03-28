@@ -1,0 +1,10 @@
+[Unit]
+Description=Meduseld Wiki Scrape (one-shot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=vertebra
+ExecStart=/srv/apps/meduseld/wiki/scrape_wiki.sh
+TimeoutStartSec=3600

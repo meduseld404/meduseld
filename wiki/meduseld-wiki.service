@@ -1,0 +1,14 @@
+[Unit]
+Description=Meduseld Wiki Server
+After=network.target
+
+[Service]
+User=vertebra
+WorkingDirectory=/srv/apps/meduseld/wiki
+Environment="WIKI_DIR=/srv/wiki/icarus"
+ExecStart=/srv/apps/meduseld/venv/bin/python /srv/apps/meduseld/wiki/wiki_server.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

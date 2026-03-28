@@ -4958,6 +4958,575 @@ def check_service(service):
                 logger.error("Failed to delete fame entry: %s", e)
                 return _fame_cors(jsonify({"error": "Delete failed"}), 500)
 
+    # Wiki health check — public, proxied to wiki microservice on port 5005
+    if service == "wiki-health":
+        return _proxy_microservice("http://127.0.0.1:5005/health")
+
+    # ================= D&D COMPANION API =================
+    if service.startswith("dnd-"):
+
+        def _dnd_cors(resp, status=200):
+            if isinstance(resp, tuple):
+                response = make_response(resp[0], resp[1])
+            else:
+                response = make_response(resp, status)
+            origin = request.headers.get("Origin")
+            if _is_valid_meduseld_origin(origin):
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+                response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+            return response
+
+        if request.method == "OPTIONS":
+            return _dnd_cors("", 204)
+
+        # --- Session Links ---
+        if service == "dnd-links":
+            if request.method == "GET":
+                from models import DndLink
+
+                links = DndLink.query.order_by(DndLink.sort_order.asc()).all()
+                return _dnd_cors(jsonify({"links": [l.to_dict() for l in links]}), 200)
+
+            user = _authenticate_from_cookie()
+            if not user:
+                return _dnd_cors(jsonify({"error": "Authentication required"}), 401)
+            if user.role != "admin":
+                return _dnd_cors(jsonify({"error": "Insufficient permissions"}), 403)
+
+            if request.method == "POST":
+                from models import DndLink
+                from database import db
+
+                data = request.get_json()
+                if not data or not data.get("label") or not data.get("url"):
+                    return _dnd_cors(jsonify({"error": "label and url required"}), 400)
+                try:
+                    link = DndLink(
+                        label=data["label"].strip(),
+                        url=data["url"].strip(),
+                        icon=data.get("icon", "bi-link-45deg").strip(),
+                        description=data.get("description", "").strip() or None,
+                        sort_order=data.get("sort_order", 0),
+                        created_by=user.id,
+                    )
+                    db.session.add(link)
+                    db.session.commit()
+                    logger.info("Admin %s added D&D link: %s", user.username, link.label)
+                    return _dnd_cors(jsonify({"link": link.to_dict()}), 201)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to create D&D link: %s", e)
+                    return _dnd_cors(jsonify({"error": "Create failed"}), 500)
+
+            return _dnd_cors(jsonify({"error": "Method not allowed"}), 405)
+
+        if service.startswith("dnd-links-"):
+            try:
+                link_id = int(service.split("dnd-links-")[1])
+            except (ValueError, IndexError):
+                return _dnd_cors(jsonify({"error": "Invalid link ID"}), 400)
+
+            user = _authenticate_from_cookie()
+            if not user:
+                return _dnd_cors(jsonify({"error": "Authentication required"}), 401)
+            if user.role != "admin":
+                return _dnd_cors(jsonify({"error": "Insufficient permissions"}), 403)
+
+            from models import DndLink
+            from database import db
+
+            link = DndLink.query.get(link_id)
+            if not link:
+                return _dnd_cors(jsonify({"error": "Link not found"}), 404)
+
+            if request.method == "PUT":
+                data = request.get_json()
+                if data.get("label"):
+                    link.label = data["label"].strip()
+                if data.get("url"):
+                    link.url = data["url"].strip()
+                if "icon" in data:
+                    link.icon = data["icon"].strip()
+                if "description" in data:
+                    link.description = data.get("description", "").strip() or None
+                if "sort_order" in data:
+                    link.sort_order = data["sort_order"]
+                try:
+                    db.session.commit()
+                    return _dnd_cors(jsonify({"link": link.to_dict()}), 200)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to update D&D link: %s", e)
+                    return _dnd_cors(jsonify({"error": "Update failed"}), 500)
+
+            if request.method == "DELETE":
+                try:
+                    db.session.delete(link)
+                    db.session.commit()
+                    logger.info("Admin %s deleted D&D link %d", user.username, link_id)
+                    return _dnd_cors(jsonify({"ok": True}), 200)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to delete D&D link: %s", e)
+                    return _dnd_cors(jsonify({"error": "Delete failed"}), 500)
+
+            return _dnd_cors(jsonify({"error": "Method not allowed"}), 405)
+
+        # --- Party Roster (Characters) ---
+        if service == "dnd-characters":
+            if request.method == "GET":
+                from models import DndCharacter
+
+                chars = DndCharacter.query.all()
+                return _dnd_cors(jsonify({"characters": [c.to_dict() for c in chars]}), 200)
+
+            user = _authenticate_from_cookie()
+            if not user:
+                return _dnd_cors(jsonify({"error": "Authentication required"}), 401)
+
+            if request.method == "POST":
+                from models import DndCharacter
+                from database import db
+
+                data = request.get_json()
+                if not data or not data.get("character_name"):
+                    return _dnd_cors(jsonify({"error": "character_name required"}), 400)
+
+                # Upsert — one character per user
+                char = DndCharacter.query.filter_by(user_id=user.id).first()
+                try:
+                    if char:
+                        char.character_name = data["character_name"].strip()
+                        char.race = data.get("race", "").strip() or None
+                        char.class_name = data.get("class_name", "").strip() or None
+                        char.level = data.get("level", 1)
+                        char.beyond_url = data.get("beyond_url", "").strip() or None
+                        char.updated_at = datetime.utcnow()
+                    else:
+                        char = DndCharacter(
+                            user_id=user.id,
+                            character_name=data["character_name"].strip(),
+                            race=data.get("race", "").strip() or None,
+                            class_name=data.get("class_name", "").strip() or None,
+                            level=data.get("level", 1),
+                            beyond_url=data.get("beyond_url", "").strip() or None,
+                        )
+                        db.session.add(char)
+                    db.session.commit()
+                    logger.info(
+                        "User %s updated D&D character: %s", user.username, char.character_name
+                    )
+                    return _dnd_cors(jsonify({"character": char.to_dict()}), 201)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to save D&D character: %s", e)
+                    return _dnd_cors(jsonify({"error": "Save failed"}), 500)
+
+            return _dnd_cors(jsonify({"error": "Method not allowed"}), 405)
+
+        if service.startswith("dnd-characters-"):
+            try:
+                char_id = int(service.split("dnd-characters-")[1])
+            except (ValueError, IndexError):
+                return _dnd_cors(jsonify({"error": "Invalid character ID"}), 400)
+
+            user = _authenticate_from_cookie()
+            if not user:
+                return _dnd_cors(jsonify({"error": "Authentication required"}), 401)
+
+            from models import DndCharacter
+            from database import db
+
+            char = DndCharacter.query.get(char_id)
+            if not char:
+                return _dnd_cors(jsonify({"error": "Character not found"}), 404)
+
+            if request.method == "PUT":
+                if char.user_id != user.id and user.role != "admin":
+                    return _dnd_cors(jsonify({"error": "Insufficient permissions"}), 403)
+                data = request.get_json()
+                if data.get("character_name"):
+                    char.character_name = data["character_name"].strip()
+                if "race" in data:
+                    char.race = data.get("race", "").strip() or None
+                if "class_name" in data:
+                    char.class_name = data.get("class_name", "").strip() or None
+                if "level" in data:
+                    char.level = data["level"]
+                if "beyond_url" in data:
+                    char.beyond_url = data.get("beyond_url", "").strip() or None
+                char.updated_at = datetime.utcnow()
+                try:
+                    db.session.commit()
+                    return _dnd_cors(jsonify({"character": char.to_dict()}), 200)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to update D&D character: %s", e)
+                    return _dnd_cors(jsonify({"error": "Update failed"}), 500)
+
+            if request.method == "DELETE":
+                if char.user_id != user.id and user.role != "admin":
+                    return _dnd_cors(jsonify({"error": "Insufficient permissions"}), 403)
+                try:
+                    db.session.delete(char)
+                    db.session.commit()
+                    return _dnd_cors(jsonify({"ok": True}), 200)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to delete D&D character: %s", e)
+                    return _dnd_cors(jsonify({"error": "Delete failed"}), 500)
+
+            return _dnd_cors(jsonify({"error": "Method not allowed"}), 405)
+
+        # --- Soundboard ---
+        if service == "dnd-sounds":
+            if request.method == "GET":
+                from models import DndSound
+
+                sounds = DndSound.query.order_by(DndSound.label.asc()).all()
+                return _dnd_cors(jsonify({"sounds": [s.to_dict() for s in sounds]}), 200)
+
+            user = _authenticate_from_cookie()
+            if not user:
+                return _dnd_cors(jsonify({"error": "Authentication required"}), 401)
+            if user.role != "admin":
+                return _dnd_cors(jsonify({"error": "Insufficient permissions"}), 403)
+
+            if request.method == "POST":
+                from models import DndSound
+                from database import db
+                import uuid as _uuid
+
+                label = request.form.get("label", "").strip()
+                icon = request.form.get("icon", "bi-music-note-beamed").strip()
+                sound_type = request.form.get("sound_type", "sfx").strip()
+                if sound_type not in ("ambient", "sfx"):
+                    sound_type = "sfx"
+                f = request.files.get("file")
+                if not label or not f:
+                    return _dnd_cors(jsonify({"error": "label and file required"}), 400)
+
+                allowed = {"audio/mpeg", "audio/wav", "audio/ogg", "audio/webm", "audio/mp4"}
+                if f.content_type not in allowed:
+                    return _dnd_cors(jsonify({"error": "Invalid audio format"}), 400)
+
+                upload_dir = "/srv/media/dnd/sounds"
+                os.makedirs(upload_dir, exist_ok=True)
+                ext = os.path.splitext(f.filename)[1] or ".mp3"
+                filename = f"{_uuid.uuid4().hex}{ext}"
+                filepath = os.path.join(upload_dir, filename)
+                try:
+                    f.save(filepath)
+                    sound = DndSound(
+                        label=label,
+                        icon=icon,
+                        file_path=filepath,
+                        sound_type=sound_type,
+                        uploaded_by=user.id,
+                    )
+                    db.session.add(sound)
+                    db.session.commit()
+                    logger.info("Admin %s uploaded D&D sound: %s", user.username, label)
+                    return _dnd_cors(jsonify({"sound": sound.to_dict()}), 201)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to upload D&D sound: %s", e)
+                    return _dnd_cors(jsonify({"error": "Upload failed"}), 500)
+
+            return _dnd_cors(jsonify({"error": "Method not allowed"}), 405)
+
+        if service.startswith("dnd-sounds-file/"):
+            # Serve sound files
+            filename = service.split("dnd-sounds-file/", 1)[1]
+            if not filename:
+                return _dnd_cors(jsonify({"error": "No filename"}), 400)
+            from werkzeug.utils import secure_filename as _secure_filename
+
+            safe = _secure_filename(filename)
+            if not safe:
+                return _dnd_cors(jsonify({"error": "Invalid filename"}), 400)
+            filepath = os.path.join("/srv/media/dnd/sounds", safe)
+            if not os.path.isfile(filepath):
+                return _dnd_cors(jsonify({"error": "Not found"}), 404)
+            import mimetypes
+
+            mime = mimetypes.guess_type(filepath)[0] or "audio/mpeg"
+            try:
+                with open(filepath, "rb") as fh:
+                    data = fh.read()
+                resp = make_response(data)
+                resp.headers["Content-Type"] = mime
+                resp.headers["Cache-Control"] = "public, max-age=86400"
+                resp.headers["Access-Control-Allow-Origin"] = "*"
+                return resp
+            except Exception as e:
+                logger.error("Failed to serve D&D sound %s: %s", filename, e)
+                return _dnd_cors(jsonify({"error": "Read failed"}), 500)
+
+        if service.startswith("dnd-sounds-"):
+            # DELETE /check/dnd-sounds-<id>
+            try:
+                sound_id = int(service.split("dnd-sounds-")[1])
+            except (ValueError, IndexError):
+                return _dnd_cors(jsonify({"error": "Invalid sound ID"}), 400)
+
+            user = _authenticate_from_cookie()
+            if not user:
+                return _dnd_cors(jsonify({"error": "Authentication required"}), 401)
+            if user.role != "admin":
+                return _dnd_cors(jsonify({"error": "Insufficient permissions"}), 403)
+
+            if request.method == "DELETE":
+                from models import DndSound
+                from database import db
+
+                sound = DndSound.query.get(sound_id)
+                if not sound:
+                    return _dnd_cors(jsonify({"error": "Sound not found"}), 404)
+                try:
+                    if sound.file_path and os.path.isfile(sound.file_path):
+                        os.remove(sound.file_path)
+                    db.session.delete(sound)
+                    db.session.commit()
+                    logger.info("Admin %s deleted D&D sound %d", user.username, sound_id)
+                    return _dnd_cors(jsonify({"ok": True}), 200)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to delete D&D sound: %s", e)
+                    return _dnd_cors(jsonify({"error": "Delete failed"}), 500)
+
+            return _dnd_cors(jsonify({"error": "Method not allowed"}), 405)
+
+        # --- Session Recaps ---
+        if service == "dnd-sessions":
+            if request.method == "GET":
+                from models import DndSession as DndSessionModel
+
+                page = request.args.get("page", 1, type=int)
+                per_page = min(request.args.get("per_page", 20, type=int), 50)
+                q = DndSessionModel.query.order_by(DndSessionModel.session_date.desc())
+                total = q.count()
+                sessions = q.offset((page - 1) * per_page).limit(per_page).all()
+                return _dnd_cors(
+                    jsonify({"sessions": [s.to_dict() for s in sessions], "total": total}), 200
+                )
+
+            user = _authenticate_from_cookie()
+            if not user:
+                return _dnd_cors(jsonify({"error": "Authentication required"}), 401)
+
+            if request.method == "POST":
+                from models import DndSession as DndSessionModel
+                from database import db
+
+                data = request.get_json()
+                if (
+                    not data
+                    or not data.get("title")
+                    or not data.get("session_date")
+                    or not data.get("body")
+                ):
+                    return _dnd_cors(
+                        jsonify({"error": "title, session_date, and body required"}), 400
+                    )
+                try:
+                    sess = DndSessionModel(
+                        title=data["title"].strip(),
+                        session_date=date.fromisoformat(data["session_date"][:10]),
+                        body=data["body"],
+                        tags=data.get("tags", "").strip() or None,
+                        created_by=user.id,
+                    )
+                    db.session.add(sess)
+                    db.session.commit()
+                    logger.info("User %s created D&D session recap: %s", user.username, sess.title)
+                    return _dnd_cors(jsonify({"session": sess.to_dict()}), 201)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to create D&D session: %s", e)
+                    return _dnd_cors(jsonify({"error": "Create failed"}), 500)
+
+            return _dnd_cors(jsonify({"error": "Method not allowed"}), 405)
+
+        if service.startswith("dnd-sessions-"):
+            try:
+                sess_id = int(service.split("dnd-sessions-")[1])
+            except (ValueError, IndexError):
+                return _dnd_cors(jsonify({"error": "Invalid session ID"}), 400)
+
+            user = _authenticate_from_cookie()
+            if not user:
+                return _dnd_cors(jsonify({"error": "Authentication required"}), 401)
+
+            from models import DndSession as DndSessionModel
+            from database import db
+
+            sess = DndSessionModel.query.get(sess_id)
+            if not sess:
+                return _dnd_cors(jsonify({"error": "Session not found"}), 404)
+
+            if request.method == "PUT":
+                data = request.get_json()
+                if data.get("title"):
+                    sess.title = data["title"].strip()
+                if data.get("session_date"):
+                    sess.session_date = date.fromisoformat(data["session_date"][:10])
+                if data.get("body"):
+                    sess.body = data["body"]
+                if "tags" in data:
+                    sess.tags = data.get("tags", "").strip() or None
+                sess.updated_at = datetime.utcnow()
+                try:
+                    db.session.commit()
+                    return _dnd_cors(jsonify({"session": sess.to_dict()}), 200)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to update D&D session: %s", e)
+                    return _dnd_cors(jsonify({"error": "Update failed"}), 500)
+
+            if request.method == "DELETE":
+                if user.role != "admin":
+                    return _dnd_cors(jsonify({"error": "Insufficient permissions"}), 403)
+                try:
+                    db.session.delete(sess)
+                    db.session.commit()
+                    logger.info("Admin %s deleted D&D session %d", user.username, sess_id)
+                    return _dnd_cors(jsonify({"ok": True}), 200)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to delete D&D session: %s", e)
+                    return _dnd_cors(jsonify({"error": "Delete failed"}), 500)
+
+            return _dnd_cors(jsonify({"error": "Method not allowed"}), 405)
+
+        # --- Wiki Pages ---
+        if service == "dnd-wiki":
+            if request.method == "GET":
+                from models import DndWikiPage
+
+                category = request.args.get("category", "")
+                q = DndWikiPage.query
+                if category:
+                    q = q.filter(DndWikiPage.category == category)
+                pages = q.order_by(DndWikiPage.title.asc()).all()
+                return _dnd_cors(jsonify({"pages": [p.to_dict() for p in pages]}), 200)
+
+            user = _authenticate_from_cookie()
+            if not user:
+                return _dnd_cors(jsonify({"error": "Authentication required"}), 401)
+
+            if request.method == "POST":
+                from models import DndWikiPage
+                from database import db
+
+                data = request.get_json()
+                if not data or not data.get("title") or not data.get("body"):
+                    return _dnd_cors(jsonify({"error": "title and body required"}), 400)
+                try:
+                    page = DndWikiPage(
+                        title=data["title"].strip(),
+                        category=data.get("category", "general").strip(),
+                        body=data["body"],
+                        image_url=data.get("image_url", "").strip() or None,
+                        created_by=user.id,
+                    )
+                    db.session.add(page)
+                    db.session.commit()
+                    logger.info("User %s created D&D wiki page: %s", user.username, page.title)
+                    return _dnd_cors(jsonify({"page": page.to_dict()}), 201)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to create D&D wiki page: %s", e)
+                    return _dnd_cors(jsonify({"error": "Create failed"}), 500)
+
+            return _dnd_cors(jsonify({"error": "Method not allowed"}), 405)
+
+        if service.startswith("dnd-wiki-"):
+            try:
+                page_id = int(service.split("dnd-wiki-")[1])
+            except (ValueError, IndexError):
+                return _dnd_cors(jsonify({"error": "Invalid page ID"}), 400)
+
+            user = _authenticate_from_cookie()
+            if not user:
+                return _dnd_cors(jsonify({"error": "Authentication required"}), 401)
+
+            from models import DndWikiPage
+            from database import db
+
+            page = DndWikiPage.query.get(page_id)
+            if not page:
+                return _dnd_cors(jsonify({"error": "Page not found"}), 404)
+
+            if request.method == "PUT":
+                data = request.get_json()
+                if data.get("title"):
+                    page.title = data["title"].strip()
+                if "category" in data:
+                    page.category = data.get("category", "general").strip()
+                if data.get("body"):
+                    page.body = data["body"]
+                if "image_url" in data:
+                    page.image_url = data.get("image_url", "").strip() or None
+                page.updated_at = datetime.utcnow()
+                try:
+                    db.session.commit()
+                    return _dnd_cors(jsonify({"page": page.to_dict()}), 200)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to update D&D wiki page: %s", e)
+                    return _dnd_cors(jsonify({"error": "Update failed"}), 500)
+
+            if request.method == "DELETE":
+                if user.role != "admin":
+                    return _dnd_cors(jsonify({"error": "Insufficient permissions"}), 403)
+                try:
+                    db.session.delete(page)
+                    db.session.commit()
+                    logger.info("Admin %s deleted D&D wiki page %d", user.username, page_id)
+                    return _dnd_cors(jsonify({"ok": True}), 200)
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error("Failed to delete D&D wiki page: %s", e)
+                    return _dnd_cors(jsonify({"error": "Delete failed"}), 500)
+
+            return _dnd_cors(jsonify({"error": "Method not allowed"}), 405)
+
+        # --- Search across recaps and wiki ---
+        if service == "dnd-search":
+            if request.method == "GET":
+                from models import DndSession as DndSessionModel, DndWikiPage
+
+                q = request.args.get("q", "").strip()
+                if not q:
+                    return _dnd_cors(jsonify({"results": []}), 200)
+                like = f"%{q}%"
+                sessions = DndSessionModel.query.filter(
+                    db.or_(
+                        DndSessionModel.title.ilike(like),
+                        DndSessionModel.body.ilike(like),
+                        DndSessionModel.tags.ilike(like),
+                    )
+                ).all()
+                wiki = DndWikiPage.query.filter(
+                    db.or_(
+                        DndWikiPage.title.ilike(like),
+                        DndWikiPage.body.ilike(like),
+                    )
+                ).all()
+                results = []
+                for s in sessions:
+                    d = s.to_dict()
+                    d["type"] = "session"
+                    results.append(d)
+                for p in wiki:
+                    d = p.to_dict()
+                    d["type"] = "wiki"
+                    results.append(d)
+                return _dnd_cors(jsonify({"results": results}), 200)
+            return _dnd_cors(jsonify({"error": "Method not allowed"}), 405)
+
     # FellowSync active rooms — public, no auth needed
     if service == "fellowsync-rooms":
 
