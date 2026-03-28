@@ -698,6 +698,8 @@ def _finalize_game(code):
         try:
             cat_name = lobby.settings.get("category_name", "")
             persisted = 0
+            # Determine the highest score to identify winner(s)
+            top_score = max((p["score"] for p in lobby.players.values()), default=0)
             for uid, p in lobby.players.items():
                 if not p["connected"] and p["score"] == 0:
                     continue  # Skip fully disconnected players with no score
@@ -706,6 +708,7 @@ def _finalize_game(code):
                     score=p["score"],
                     total_questions=lobby.settings.get("num_questions", len(lobby.questions)),
                     category=cat_name,
+                    won=(p["score"] == top_score and top_score > 0),
                 )
                 db.session.add(win)
                 persisted += 1

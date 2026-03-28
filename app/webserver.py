@@ -4142,7 +4142,7 @@ def check_service(service):
                 from database import db
                 from sqlalchemy import func
 
-                # Aggregate wins per user
+                # Aggregate wins per user (only count rows where won=True)
                 results = (
                     db.session.query(
                         TriviaWin.user_id,
@@ -4150,6 +4150,7 @@ def check_service(service):
                         func.sum(TriviaWin.score).label("total_score"),
                         func.sum(TriviaWin.total_questions).label("total_questions"),
                     )
+                    .filter(TriviaWin.won == True)
                     .group_by(TriviaWin.user_id)
                     .order_by(func.count(TriviaWin.id).desc(), func.sum(TriviaWin.score).desc())
                     .all()

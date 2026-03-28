@@ -242,6 +242,7 @@ class TriviaWin(db.Model):
     score = db.Column(db.Integer, nullable=False)
     total_questions = db.Column(db.Integer, nullable=False)
     category = db.Column(db.String(128))
+    won = db.Column(db.Boolean, default=False)
     played_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
     user = db.relationship("User", backref="trivia_wins")
