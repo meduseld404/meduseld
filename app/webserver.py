@@ -42,12 +42,27 @@ app = Flask(
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 
+# Validate that an Origin header belongs to *.meduseld.io
+def _is_valid_meduseld_origin(origin):
+    """Check if origin is a valid meduseld.io subdomain using URL parsing."""
+    if not origin:
+        return False
+    try:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(origin)
+        host = parsed.hostname or ""
+        return host == "meduseld.io" or host.endswith(".meduseld.io")
+    except Exception:
+        return False
+
+
 # Add CORS headers for API endpoints
 @app.after_request
 def add_cors_headers(response):
     # Allow system.meduseld.io and services.meduseld.io to access API
     origin = request.headers.get("Origin")
-    if origin and "meduseld.io" in origin:
+    if _is_valid_meduseld_origin(origin):
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = (
@@ -69,7 +84,7 @@ def add_cors_headers(response):
 def cors_preflight(**kwargs):
     response = make_response("", 204)
     origin = request.headers.get("Origin")
-    if origin and "meduseld.io" in origin:
+    if _is_valid_meduseld_origin(origin):
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = (
@@ -3251,7 +3266,7 @@ def check_service(service):
             else:
                 response = make_response(resp, status)
             origin = request.headers.get("Origin")
-            if origin and "meduseld.io" in origin:
+            if _is_valid_meduseld_origin(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -3419,7 +3434,7 @@ def check_service(service):
             else:
                 response = make_response(resp, status)
             origin = request.headers.get("Origin")
-            if origin and "meduseld.io" in origin:
+            if _is_valid_meduseld_origin(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -3458,7 +3473,7 @@ def check_service(service):
             else:
                 response = make_response(resp, status)
             origin = request.headers.get("Origin")
-            if origin and "meduseld.io" in origin:
+            if _is_valid_meduseld_origin(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -3618,7 +3633,7 @@ def check_service(service):
             else:
                 response = make_response(resp, status)
             origin = request.headers.get("Origin")
-            if origin and "meduseld.io" in origin:
+            if _is_valid_meduseld_origin(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -3728,7 +3743,7 @@ def check_service(service):
             else:
                 response = make_response(resp, status)
             origin = request.headers.get("Origin")
-            if origin and "meduseld.io" in origin:
+            if _is_valid_meduseld_origin(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, PUT, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -3830,7 +3845,7 @@ def check_service(service):
             else:
                 response = make_response(resp, status)
             origin = request.headers.get("Origin")
-            if origin and "meduseld.io" in origin:
+            if _is_valid_meduseld_origin(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -3919,7 +3934,7 @@ def check_service(service):
             else:
                 response = make_response(resp, status)
             origin = request.headers.get("Origin")
-            if origin and "meduseld.io" in origin:
+            if _is_valid_meduseld_origin(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -3967,7 +3982,7 @@ def check_service(service):
             else:
                 response = make_response(resp, status)
             origin = request.headers.get("Origin")
-            if origin and "meduseld.io" in origin:
+            if _is_valid_meduseld_origin(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -4101,7 +4116,7 @@ def check_service(service):
             else:
                 response = make_response(resp, status)
             origin = request.headers.get("Origin")
-            if origin and "meduseld.io" in origin:
+            if _is_valid_meduseld_origin(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -4132,7 +4147,7 @@ def check_service(service):
             else:
                 response = make_response(resp, status)
             origin = request.headers.get("Origin")
-            if origin and "meduseld.io" in origin:
+            if _is_valid_meduseld_origin(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -4234,7 +4249,7 @@ def check_service(service):
             else:
                 response = make_response(resp, status)
             origin = request.headers.get("Origin")
-            if origin and "meduseld.io" in origin:
+            if _is_valid_meduseld_origin(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, PUT, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -4368,7 +4383,7 @@ def check_service(service):
             else:
                 response = make_response(resp, status)
             origin = request.headers.get("Origin")
-            if origin and "meduseld.io" in origin:
+            if _is_valid_meduseld_origin(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -4596,7 +4611,7 @@ def check_service(service):
             else:
                 response = make_response(resp, status)
             origin = request.headers.get("Origin")
-            if origin and "meduseld.io" in origin:
+            if _is_valid_meduseld_origin(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -4629,7 +4644,7 @@ def check_service(service):
             else:
                 response = make_response(resp, status)
             origin = request.headers.get("Origin")
-            if origin and "meduseld.io" in origin:
+            if _is_valid_meduseld_origin(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -4952,7 +4967,7 @@ def check_service(service):
             else:
                 response = make_response(resp, status)
             origin = request.headers.get("Origin")
-            if origin and "meduseld.io" in origin:
+            if _is_valid_meduseld_origin(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "Content-Type"
