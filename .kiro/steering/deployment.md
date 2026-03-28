@@ -92,7 +92,7 @@ Served via Cloudflare Pages at `/srv/meduseld-site`
   - Routed through Cloudflare Tunnel (not proxied through Flask)
   - No authentication required
   - systemd: `meduseld-wiki.service`
-  - Scrape script: `wiki/scrape_wiki.sh` (uses `wget --mirror`, strips tracking/edit UI, injects local mirror banner)
+  - Scrape script: `wiki/scrape_wiki.py` (Python, uses MediaWiki API to bypass Cloudflare bot detection)
   - Auto-sync: `meduseld-wiki-scrape.timer` runs weekly (Sunday 04:00 UTC)
   - Health check: `GET /health` returns `{status, wiki_dir, pages, last_sync}`
   - Env: `WIKI_DIR` (default `/srv/wiki/icarus`)
@@ -703,7 +703,7 @@ Three lightweight Python HTTP servers run independently of the Flask app so the 
    - systemd: `meduseld-wiki.service`
    - Endpoints: `GET /health` (returns `{status, wiki_dir, pages, last_sync}`), `GET /*` (serves static wiki files)
    - Serves static mirror of `icarus.wiki.gg` from `/srv/wiki/icarus`
-   - Scrape script: `wiki/scrape_wiki.sh` (wget mirror, strips tracking/edit UI, injects local mirror banner)
+   - Scrape script: `wiki/scrape_wiki.py` (Python, uses MediaWiki API to bypass Cloudflare bot detection — enumerates pages via `allpages`, fetches rendered HTML via `parse`, downloads images)
    - Auto-sync: `meduseld-wiki-scrape.timer` runs weekly (Sunday 04:00 UTC, 30-min random delay)
    - Env: `WIKI_DIR` (default `/srv/wiki/icarus`)
 
