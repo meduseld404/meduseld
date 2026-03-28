@@ -964,11 +964,12 @@ Served by standalone wiki microservice (`wiki/wiki_server.py`) on port 5005 from
 
 ### Wiki Pages
 
-- Each page is a standalone HTML file with embedded CSS
+- Each page is a standalone HTML file with wiki CSS linked from wiki.gg
 - Navigation bar (sticky top): "← Back to Services" link on the left, "All Pages" link on the right (links to index)
 - Internal wiki links rewritten from `/wiki/Page_Name` to `Page_Name.html` (relative)
+- Image URLs made absolute to wiki.gg (browsers load them directly, bypassing Cloudflare bot detection)
+- Wiki CSS stylesheets linked from wiki.gg CDN (not embedded — Cloudflare blocks programmatic downloads but browsers load them fine)
 - Edit/login UI stripped, tracking scripts removed
-- Images downloaded locally to `images/` subdirectory, src paths rewritten
 
 ---
 
