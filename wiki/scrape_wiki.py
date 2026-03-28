@@ -29,8 +29,9 @@ from pathlib import Path
 API_URL = "https://icarus.wiki.gg/api.php"
 WIKI_BASE = "https://icarus.wiki.gg"
 USER_AGENT = "MeduseldWikiMirror/1.0 (https://meduseld.io)"
-CRAWL_DELAY = 0.3  # seconds between API requests
+CRAWL_DELAY = 1.0  # seconds between API requests (wiki.gg rate-limits aggressively)
 MAX_PAGES = 2000
+MAX_RETRIES = 3  # retries on 429/5xx with exponential backoff
 
 WIKI_DIR = Path(os.environ.get("WIKI_DIR", "/srv/wiki/icarus"))
 TEMP_DIR = WIKI_DIR.parent / ".scrape-tmp"
@@ -49,25 +50,37 @@ log = logging.getLogger("scrape")
 
 
 def api_request(params):
-    """Make a MediaWiki API request and return parsed JSON."""
+    """Make a MediaWiki API request and return parsed JSON. Retries on 429/5xx."""
     params["format"] = "json"
     url = f"{API_URL}?{urllib.parse.urlencode(params)}"
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            raw = resp.read().decode("utf-8")
-            data = json.loads(raw)
-            # Check for Cloudflare challenge (HTML instead of JSON)
-            if not isinstance(data, dict):
-                log.error("API returned non-dict: %s", type(data))
-                return None
-            return data
-    except json.JSONDecodeError as e:
-        log.error("API returned non-JSON (likely Cloudflare challenge): %s", e)
-        return None
-    except Exception as e:
-        log.error("API request failed: %s (url=%s)", e, url)
-        return None
+
+    for attempt in range(MAX_RETRIES + 1):
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                raw = resp.read().decode("utf-8")
+                data = json.loads(raw)
+                if not isinstance(data, dict):
+                    log.error("API returned non-dict: %s", type(data))
+                    return None
+                return data
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 500, 502, 503) and attempt < MAX_RETRIES:
+                wait = (attempt + 1) * 5  # 5s, 10s, 15s backoff
+                log.warning(
+                    "API returned %d, retrying in %ds... (%s)", e.code, wait, params.get("page", "")
+                )
+                time.sleep(wait)
+                continue
+            log.error("API request failed: %s (url=%s)", e, url)
+            return None
+        except json.JSONDecodeError as e:
+            log.error("API returned non-JSON (likely Cloudflare challenge): %s", e)
+            return None
+        except Exception as e:
+            log.error("API request failed: %s (url=%s)", e, url)
+            return None
+    return None
 
 
 def get_all_page_titles():
@@ -283,8 +296,10 @@ def main():
         return 1
 
     # Ensure Main Page is included (it's often missing from allpages)
-    if "Main Page" not in titles:
-        titles.insert(0, "Main Page")
+    # and put it first so it's fetched before any rate-limiting kicks in
+    if "Main Page" in titles:
+        titles.remove("Main Page")
+    titles.insert(0, "Main Page")
 
     # Prepare temp directory
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
