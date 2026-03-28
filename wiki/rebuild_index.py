@@ -96,8 +96,12 @@ body {{ background: #1a1a2e; color: #e0e0e0; font-family: -apple-system, BlinkMa
 .mirror-nav {{ background: #0f0f23; border-bottom: 2px solid #e6c65c33; padding: 8px 16px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 1000; }}
 .mirror-nav a {{ color: #e6c65c; text-decoration: none; font-size: 0.85rem; }}
 .mirror-nav a:hover {{ text-decoration: underline; }}
-.content {{ max-width: 960px; margin: 0 auto; padding: 20px; }}
+.content {{ max-width: 1200px; margin: 0 auto; padding: 20px; }}
 h1 {{ color: #e6c65c; }}
+#categories {{ columns: 3; column-gap: 24px; }}
+@media (max-width: 900px) {{ #categories {{ columns: 2; }} }}
+@media (max-width: 600px) {{ #categories {{ columns: 1; }} }}
+.category-section {{ break-inside: avoid; margin-bottom: 12px; }}
 .search-box {{ width: 100%; padding: 10px 14px; font-size: 1rem; border: 1px solid #e6c65c44; border-radius: 6px; background: #0f0f23; color: #e0e0e0; margin-bottom: 16px; box-sizing: border-box; }}
 .search-box:focus {{ outline: none; border-color: #e6c65c; }}
 .page-count {{ color: #e6c65c88; font-size: 0.85rem; margin-bottom: 12px; }}
