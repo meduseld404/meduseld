@@ -1,18 +1,88 @@
 #!/usr/bin/env python3
-"""Rebuild the wiki index.html from existing scraped pages."""
+"""Rebuild the wiki index.html from existing scraped pages and categories."""
+import json
 import os
+from collections import defaultdict
 from pathlib import Path
 
 WIKI_DIR = Path(os.environ.get("WIKI_DIR", "/srv/wiki/icarus"))
 
+# Load categories if available
+categories_file = WIKI_DIR / "categories.json"
+page_categories = {}
+if categories_file.exists():
+    try:
+        page_categories = json.loads(categories_file.read_text())
+    except Exception:
+        pass
+
+# Collect all page files
 page_files = sorted(
     [f.stem for f in WIKI_DIR.glob("*.html") if f.name != "index.html"],
     key=lambda x: x.lower(),
 )
 
-page_links = "\n".join(
-    f'<li class="wiki-link" data-name="{name.lower()}"><a href="{name}.html">{name.replace("_", " ")}</a></li>'
-    for name in page_files
+# Skip internal/meta categories
+SKIP_CATS = {
+    "Animated Images",
+    "Blog posts",
+    "Candidates for deletion",
+    "Candidates for merging",
+    "Candidates for moving",
+    "Candidates for splitting",
+    "CS1 errors",
+    "CS1 errors: ISBN date",
+    "CS1 location test",
+}
+
+# Build category -> pages mapping using first non-skipped category per page
+cat_to_pages = defaultdict(list)
+uncategorized = []
+
+for name in page_files:
+    title = name.replace("_", " ")
+    cats = page_categories.get(title, [])
+    # Filter out asset/meta categories
+    cats = [c for c in cats if c not in SKIP_CATS and not c.startswith("Assets")]
+    if cats:
+        # Use the first category as the primary grouping
+        cat_to_pages[cats[0]].append(name)
+    else:
+        uncategorized.append(name)
+
+# Sort categories alphabetically
+sorted_cats = sorted(cat_to_pages.keys(), key=lambda x: x.lower())
+
+# Build category sections HTML
+sections_html = ""
+for cat in sorted_cats:
+    pages = cat_to_pages[cat]
+    links = "\n".join(
+        f'<li class="wiki-link" data-name="{n.lower()}"><a href="{n}.html">{n.replace("_", " ")}</a></li>'
+        for n in pages
+    )
+    sections_html += f"""
+<div class="category-section" data-cat="{cat.lower()}">
+  <h2 class="cat-header" onclick="this.parentElement.classList.toggle('collapsed')">{cat} <span class="cat-count">{len(pages)}</span></h2>
+  <ul class="wiki-list">{links}</ul>
+</div>"""
+
+# Uncategorized section
+if uncategorized:
+    links = "\n".join(
+        f'<li class="wiki-link" data-name="{n.lower()}"><a href="{n}.html">{n.replace("_", " ")}</a></li>'
+        for n in uncategorized
+    )
+    sections_html += f"""
+<div class="category-section" data-cat="uncategorized">
+  <h2 class="cat-header" onclick="this.parentElement.classList.toggle('collapsed')">Other <span class="cat-count">{len(uncategorized)}</span></h2>
+  <ul class="wiki-list">{links}</ul>
+</div>"""
+
+# Build all-pages flat list for search results
+all_links = "\n".join(
+    f'<li class="wiki-link" data-name="{n.lower()}"><a href="{n}.html">{n.replace("_", " ")}</a></li>'
+    for n in page_files
 )
 
 html = f"""<!DOCTYPE html>
@@ -26,8 +96,6 @@ body {{ background: #1a1a2e; color: #e0e0e0; font-family: -apple-system, BlinkMa
 .mirror-nav {{ background: #0f0f23; border-bottom: 2px solid #e6c65c33; padding: 8px 16px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 1000; }}
 .mirror-nav a {{ color: #e6c65c; text-decoration: none; font-size: 0.85rem; }}
 .mirror-nav a:hover {{ text-decoration: underline; }}
-.mirror-nav .brand {{ font-weight: 600; }}
-.mirror-nav .back {{ margin-left: auto; }}
 .content {{ max-width: 960px; margin: 0 auto; padding: 20px; }}
 h1 {{ color: #e6c65c; }}
 .search-box {{ width: 100%; padding: 10px 14px; font-size: 1rem; border: 1px solid #e6c65c44; border-radius: 6px; background: #0f0f23; color: #e0e0e0; margin-bottom: 16px; box-sizing: border-box; }}
@@ -39,38 +107,64 @@ h1 {{ color: #e6c65c; }}
 .wiki-link a {{ color: #e6c65c; text-decoration: none; font-size: 0.9rem; }}
 .wiki-link a:hover {{ text-decoration: underline; }}
 .wiki-link.hidden {{ display: none; }}
-.featured {{ background: #1e1e38; border: 1px solid #e6c65c33; border-radius: 8px; padding: 16px; margin-bottom: 20px; }}
-.featured a {{ color: #e6c65c; text-decoration: none; font-size: 1.1rem; font-weight: 600; }}
+.category-section {{ margin-bottom: 8px; }}
+.cat-header {{ color: #e6c65c; font-size: 1rem; cursor: pointer; user-select: none; padding: 6px 0; margin: 0; border-bottom: 1px solid #e6c65c22; }}
+.cat-header:hover {{ color: #fff; }}
+.cat-count {{ font-size: 0.75rem; color: #e6c65c66; font-weight: normal; margin-left: 6px; }}
+.cat-header::before {{ content: "▾ "; font-size: 0.8rem; }}
+.collapsed .cat-header::before {{ content: "▸ "; }}
+.collapsed .wiki-list {{ display: none; }}
+#search-results {{ display: none; }}
+#search-results.active {{ display: block; }}
+#categories.hidden {{ display: none; }}
 </style>
 </head>
 <body>
 <nav class="mirror-nav">
-  <span class="brand">\U0001f4d6 Icarus Wiki</span>
-  <a href="https://services.meduseld.io" class="back">\u2190 Back to Services</a>
+  <a href="https://services.meduseld.io">\u2190 Back to Services</a>
 </nav>
 <div class="content">
 <h1>Icarus Wiki</h1>
-<input type="text" class="search-box" placeholder="Search pages..." id="search" autocomplete="off">
-<div class="page-count" id="count">{len(page_files)} pages</div>
-<ul class="wiki-list" id="pages">
-{page_links}
+<input type="text" class="search-box" placeholder="Search {len(page_files)} pages..." id="search" autocomplete="off">
+<div class="page-count" id="count">{len(page_files)} pages in {len(sorted_cats)} categories</div>
+<div id="categories">
+{sections_html}
+</div>
+<div id="search-results">
+<ul class="wiki-list" id="search-list">
+{all_links}
 </ul>
 </div>
+</div>
 <script>
-document.getElementById('search').addEventListener('input', function() {{
-  var q = this.value.toLowerCase();
-  var items = document.querySelectorAll('.wiki-link');
+var searchBox = document.getElementById('search');
+var categories = document.getElementById('categories');
+var searchResults = document.getElementById('search-results');
+var countEl = document.getElementById('count');
+var totalPages = {len(page_files)};
+
+searchBox.addEventListener('input', function() {{
+  var q = this.value.toLowerCase().trim();
+  if (!q) {{
+    categories.classList.remove('hidden');
+    searchResults.classList.remove('active');
+    countEl.textContent = totalPages + ' pages in {len(sorted_cats)} categories';
+    return;
+  }}
+  categories.classList.add('hidden');
+  searchResults.classList.add('active');
+  var items = searchResults.querySelectorAll('.wiki-link');
   var shown = 0;
   items.forEach(function(li) {{
-    var match = !q || li.getAttribute('data-name').indexOf(q) !== -1;
+    var match = li.getAttribute('data-name').indexOf(q) !== -1;
     li.classList.toggle('hidden', !match);
     if (match) shown++;
   }});
-  document.getElementById('count').textContent = shown + ' / {len(page_files)} pages';
+  countEl.textContent = shown + ' / ' + totalPages + ' pages';
 }});
 </script>
 </body>
 </html>"""
 
 (WIKI_DIR / "index.html").write_text(html, encoding="utf-8")
-print(f"Rebuilt index.html with {len(page_files)} pages")
+print(f"Rebuilt index.html with {len(page_files)} pages in {len(sorted_cats)} categories")

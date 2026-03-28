@@ -116,11 +116,12 @@ def fetch_page_html(title):
         }
     )
     if not data or "parse" not in data:
-        return None, None
+        return None, None, []
     parse = data["parse"]
     html = parse.get("text", {}).get("*", "")
     display_title = parse.get("displaytitle", title)
-    return html, display_title
+    categories = [c["*"] for c in parse.get("categories", []) if not c.get("hidden")]
+    return html, display_title, categories
 
 
 def fetch_wiki_css():
@@ -206,10 +207,8 @@ body {{ background: #1a1a2e; color: #e0e0e0; font-family: -apple-system, BlinkMa
 </head>
 <body>
 <nav class="mirror-nav">
-  <a href="Main_Page.html" class="brand">\U0001f4d6 Icarus Wiki</a>
-  <span class="sep">|</span>
-  <a href="Main_Page.html">Main Page</a>
-  <a href="https://services.meduseld.io" class="back">\u2190 Back to Services</a>
+  <a href="https://services.meduseld.io">\u2190 Back to Services</a>
+  <a href="index.html" class="back">All Pages</a>
 </nav>
 <div class="mw-parser-output">
 <h1>{display_title}</h1>
@@ -334,8 +333,9 @@ def main():
     log.info("Fetching %d pages...", len(titles))
     fetched = 0
     failed = []
+    page_categories = {}  # title -> [categories]
     for i, title in enumerate(titles):
-        html, display_title = fetch_page_html(title)
+        html, display_title, categories = fetch_page_html(title)
         if html is None:
             log.warning("Failed to fetch: %s", title)
             failed.append(title)
@@ -346,6 +346,9 @@ def main():
         out_path = pages_dir / filename
         out_path.write_text(full_html, encoding="utf-8")
         fetched += 1
+
+        if categories:
+            page_categories[title] = categories
 
         if title == "Main Page":
             log.info("Main Page saved as %s (%d bytes)", filename, out_path.stat().st_size)
@@ -363,74 +366,19 @@ def main():
         log.error("No pages fetched successfully")
         return 1
 
-    # Create index.html — a searchable directory of all wiki pages
-    index_path = pages_dir / "index.html"
-    page_files = sorted(
-        [f.stem for f in pages_dir.glob("*.html") if f.name != "index.html"],
-        key=lambda x: x.lower(),
-    )
-    page_links = "\n".join(
-        f'<li class="wiki-link" data-name="{name.lower()}"><a href="{name}.html">{name.replace("_", " ")}</a></li>'
-        for name in page_files
-    )
-    index_path.write_text(
-        f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Icarus Wiki - Local Mirror</title>
-<style>
-body {{ background: #1a1a2e; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; }}
-.mirror-nav {{ background: #0f0f23; border-bottom: 2px solid #e6c65c33; padding: 8px 16px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 1000; }}
-.mirror-nav a {{ color: #e6c65c; text-decoration: none; font-size: 0.85rem; }}
-.mirror-nav a:hover {{ text-decoration: underline; }}
-.mirror-nav .brand {{ font-weight: 600; }}
-.mirror-nav .back {{ margin-left: auto; }}
-.content {{ max-width: 960px; margin: 0 auto; padding: 20px; }}
-h1 {{ color: #e6c65c; }}
-.search-box {{ width: 100%; padding: 10px 14px; font-size: 1rem; border: 1px solid #e6c65c44; border-radius: 6px; background: #0f0f23; color: #e0e0e0; margin-bottom: 16px; box-sizing: border-box; }}
-.search-box:focus {{ outline: none; border-color: #e6c65c; }}
-.page-count {{ color: #e6c65c88; font-size: 0.85rem; margin-bottom: 12px; }}
-.wiki-list {{ list-style: none; padding: 0; columns: 2; column-gap: 24px; }}
-@media (max-width: 600px) {{ .wiki-list {{ columns: 1; }} }}
-.wiki-link {{ padding: 3px 0; break-inside: avoid; }}
-.wiki-link a {{ color: #e6c65c; text-decoration: none; font-size: 0.9rem; }}
-.wiki-link a:hover {{ text-decoration: underline; }}
-.wiki-link.hidden {{ display: none; }}
-.featured {{ background: #1e1e38; border: 1px solid #e6c65c33; border-radius: 8px; padding: 16px; margin-bottom: 20px; }}
-.featured a {{ color: #e6c65c; text-decoration: none; font-size: 1.1rem; font-weight: 600; }}
-</style>
-</head>
-<body>
-<nav class="mirror-nav">
-  <span class="brand">\U0001f4d6 Icarus Wiki</span>
-  <a href="https://services.meduseld.io" class="back">\u2190 Back to Services</a>
-</nav>
-<div class="content">
-<h1>Icarus Wiki</h1>
-<input type="text" class="search-box" placeholder="Search pages..." id="search" autocomplete="off">
-<div class="page-count" id="count">{len(page_files)} pages</div>
-<ul class="wiki-list" id="pages">
-{page_links}
-</ul>
-</div>
-<script>
-document.getElementById('search').addEventListener('input', function() {{
-  var q = this.value.toLowerCase();
-  var items = document.querySelectorAll('.wiki-link');
-  var shown = 0;
-  items.forEach(function(li) {{
-    var match = !q || li.getAttribute('data-name').indexOf(q) !== -1;
-    li.classList.toggle('hidden', !match);
-    if (match) shown++;
-  }});
-  document.getElementById('count').textContent = shown + ' / {len(page_files)} pages';
-}});
-</script>
-</body>
-</html>""",
-        encoding="utf-8",
+    # Save categories mapping for index builder
+    categories_path = pages_dir / "categories.json"
+    categories_path.write_text(json.dumps(page_categories, indent=2), encoding="utf-8")
+    log.info("Saved categories for %d pages", len(page_categories))
+
+    # Build index.html using rebuild_index module
+    import subprocess
+
+    env = os.environ.copy()
+    env["WIKI_DIR"] = str(pages_dir)
+    subprocess.run(
+        [sys.executable, str(Path(__file__).parent / "rebuild_index.py")],
+        env=env,
     )
 
     # Download images
