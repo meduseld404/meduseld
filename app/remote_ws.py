@@ -8,8 +8,11 @@ All session state is ephemeral (in-memory); nothing is persisted to the database
 import random
 import string
 import logging
+import os
 import threading
 import time
+import shutil
+import subprocess
 import jwt
 from flask import request
 from flask_socketio import emit, join_room, leave_room
@@ -20,6 +23,188 @@ logger = logging.getLogger(__name__)
 remote_sessions = {}
 
 SESSION_TIMEOUT = 1800  # 30 minutes idle timeout
+
+# Check if xdotool is available for OS-level input injection
+_xdotool_available = shutil.which("xdotool") is not None
+if _xdotool_available:
+    logger.info("xdotool found — OS-level remote control available")
+else:
+    logger.info("xdotool not found — OS-level remote control disabled")
+
+
+def _get_screen_size():
+    """Get the primary screen resolution via xdotool. Cached for 30 seconds."""
+    now = time.time()
+    if _screen_size_cache["w"] and (now - _screen_size_cache["ts"]) < 30:
+        return _screen_size_cache["w"], _screen_size_cache["h"]
+    try:
+        result = subprocess.run(
+            ["xdotool", "getdisplaygeometry"],
+            capture_output=True, text=True, timeout=2
+        )
+        if result.returncode == 0:
+            parts = result.stdout.strip().split()
+            w, h = int(parts[0]), int(parts[1])
+            _screen_size_cache["w"] = w
+            _screen_size_cache["h"] = h
+            _screen_size_cache["ts"] = now
+            return w, h
+    except Exception as e:
+        logger.error("Failed to get screen size: %s", e)
+    return None, None
+
+
+_screen_size_cache = {"w": None, "h": None, "ts": 0}
+
+
+def _inject_input(evt):
+    """Inject a mouse/keyboard event into the OS via xdotool."""
+    if not _xdotool_available:
+        return False
+
+    # xdotool needs DISPLAY set — default to :0 for the primary X session
+    env = dict(os.environ)
+    if "DISPLAY" not in env:
+        env["DISPLAY"] = ":0"
+
+    try:
+        evt_type = evt.get("type")
+
+        if evt_type in ("mousemove", "click", "dblclick", "mousedown", "mouseup", "contextmenu"):
+            screen_w, screen_h = _get_screen_size()
+            if not screen_w:
+                return False
+            x = int(evt.get("x", 0) * screen_w)
+            y = int(evt.get("y", 0) * screen_h)
+
+            if evt_type == "mousemove":
+                subprocess.Popen(
+                    ["xdotool", "mousemove", "--", str(x), str(y)],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+                )
+            elif evt_type == "click":
+                button = str((evt.get("button", 0) or 0) + 1)  # JS 0=left,1=mid,2=right → xdotool 1,2,3
+                subprocess.Popen(
+                    ["xdotool", "mousemove", "--", str(x), str(y)],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+                )
+                subprocess.Popen(
+                    ["xdotool", "click", button],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+                )
+            elif evt_type == "dblclick":
+                button = str((evt.get("button", 0) or 0) + 1)
+                subprocess.Popen(
+                    ["xdotool", "mousemove", "--", str(x), str(y)],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+                )
+                subprocess.Popen(
+                    ["xdotool", "click", "--repeat", "2", "--delay", "50", button],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+                )
+            elif evt_type == "contextmenu":
+                subprocess.Popen(
+                    ["xdotool", "mousemove", "--", str(x), str(y)],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+                )
+                subprocess.Popen(
+                    ["xdotool", "click", "3"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+                )
+            elif evt_type == "mousedown":
+                button = str((evt.get("button", 0) or 0) + 1)
+                subprocess.Popen(
+                    ["xdotool", "mousemove", "--", str(x), str(y)],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+                )
+                subprocess.Popen(
+                    ["xdotool", "mousedown", button],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+                )
+            elif evt_type == "mouseup":
+                button = str((evt.get("button", 0) or 0) + 1)
+                subprocess.Popen(
+                    ["xdotool", "mousemove", "--", str(x), str(y)],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+                )
+                subprocess.Popen(
+                    ["xdotool", "mouseup", button],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+                )
+            return True
+
+        elif evt_type == "scroll":
+            screen_w, screen_h = _get_screen_size()
+            if not screen_w:
+                return False
+            x = int(evt.get("x", 0) * screen_w)
+            y = int(evt.get("y", 0) * screen_h)
+            subprocess.Popen(
+                ["xdotool", "mousemove", "--", str(x), str(y)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+            )
+            delta_y = evt.get("deltaY", 0)
+            # xdotool: button 4 = scroll up, button 5 = scroll down
+            scroll_button = "5" if delta_y > 0 else "4"
+            clicks = max(1, min(10, abs(int(delta_y / 50))))
+            subprocess.Popen(
+                ["xdotool", "click", "--repeat", str(clicks), scroll_button],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+            )
+            return True
+
+        elif evt_type == "keydown":
+            key = _js_key_to_xdotool(evt)
+            if key:
+                subprocess.Popen(
+                    ["xdotool", "keydown", key],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+                )
+                return True
+
+        elif evt_type == "keyup":
+            key = _js_key_to_xdotool(evt)
+            if key:
+                subprocess.Popen(
+                    ["xdotool", "keyup", key],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+                )
+                return True
+
+    except Exception as e:
+        logger.error("xdotool injection failed: %s", e)
+    return False
+
+
+# Map JS key names to xdotool key names
+_JS_TO_XDOTOOL_KEYS = {
+    "Enter": "Return", "Backspace": "BackSpace", "Tab": "Tab",
+    "Escape": "Escape", "Delete": "Delete", "Insert": "Insert",
+    "Home": "Home", "End": "End", "PageUp": "Prior", "PageDown": "Next",
+    "ArrowUp": "Up", "ArrowDown": "Down", "ArrowLeft": "Left", "ArrowRight": "Right",
+    "Control": "Control_L", "Shift": "Shift_L", "Alt": "Alt_L", "Meta": "Super_L",
+    "CapsLock": "Caps_Lock", "NumLock": "Num_Lock", "ScrollLock": "Scroll_Lock",
+    "F1": "F1", "F2": "F2", "F3": "F3", "F4": "F4", "F5": "F5", "F6": "F6",
+    "F7": "F7", "F8": "F8", "F9": "F9", "F10": "F10", "F11": "F11", "F12": "F12",
+    " ": "space", "ContextMenu": "Menu",
+}
+
+
+def _js_key_to_xdotool(evt):
+    """Convert a JS keyboard event to an xdotool key name."""
+    key = evt.get("key", "")
+    if key in _JS_TO_XDOTOOL_KEYS:
+        return _JS_TO_XDOTOOL_KEYS[key]
+    # Single printable character
+    if len(key) == 1:
+        return key
+    # Fall back to code field
+    code = evt.get("code", "")
+    if code.startswith("Key"):
+        return code[3:].lower()
+    if code.startswith("Digit"):
+        return code[5:]
+    return None
 
 
 class RemoteSession:
@@ -32,6 +217,7 @@ class RemoteSession:
         self.host_info = host_info  # {display_name, avatar_url, discord_id}
         self.viewers = {}  # user_id -> {sid, display_name, avatar_url, discord_id, control_granted}
         self.pending_viewers = {}  # user_id -> {sid, display_name, avatar_url, discord_id}
+        self.os_control = False  # Whether xdotool injection is enabled for this session
         self.created_at = time.time()
         self.last_activity = time.time()
         self.lock = threading.Lock()
@@ -52,6 +238,7 @@ class RemoteSession:
             "host_name": self.host_info.get("display_name", "Unknown"),
             "host_avatar": self.host_info.get("avatar_url"),
             "viewer_count": self.viewer_count(),
+            "os_control": self.os_control,
             "viewers": [
                 {
                     "user_id": uid,
@@ -416,17 +603,66 @@ def register_remote_ws(socketio):
             return
 
         session.touch()
+        evt = (data or {}).get("event")
+
+        # Inject into OS via xdotool if enabled for this session
+        if session.os_control and evt:
+            _inject_input(evt)
 
         if session.host_sid:
             socketio.emit(
                 "input_event",
                 {
                     "from_user_id": user.id,
-                    "event": (data or {}).get("event"),
+                    "event": evt,
                 },
                 room=session.host_sid,
                 namespace="/remote",
             )
+
+    @socketio.on("toggle_os_control", namespace="/remote")
+    def on_toggle_os_control(data):
+        """Toggle OS-level input injection (xdotool) for this session. Host-only, admin-only."""
+        user = request.environ.get("remote_user")
+        if not user:
+            emit("error", {"message": "Not authenticated"})
+            return
+
+        if user.role != "admin":
+            emit("error", {"message": "Admin only"})
+            return
+
+        code = (data or {}).get("code", "").strip().upper()
+        session = remote_sessions.get(code)
+        if not session or session.host_user_id != user.id:
+            emit("error", {"message": "Not the host of this session"})
+            return
+
+        if not _xdotool_available:
+            emit("error", {"message": "OS control not available on this server (xdotool not installed)"})
+            return
+
+        with session.lock:
+            session.os_control = not session.os_control
+            enabled = session.os_control
+            session.touch()
+
+        emit("os_control_toggled", {"enabled": enabled})
+
+        # Notify everyone
+        socketio.emit(
+            "session_updated",
+            {"session": session.to_dict()},
+            room=code,
+            namespace="/remote",
+        )
+
+        logger.info(
+            "Remote: OS control %s for session %s by %s",
+            "enabled" if enabled else "disabled",
+            code,
+            user.username,
+        )
 
     @socketio.on("end_session", namespace="/remote")
     def on_end_session(data):
