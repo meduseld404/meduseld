@@ -5057,6 +5057,14 @@ def jellyfin_catch_all(path):
         token = request.args.get("token", "")
         user_id = request.args.get("userId", "")
         server_id = request.args.get("serverId", "")
+
+        # Escape values for safe inline script embedding (prevent </script> injection)
+        def _js_safe(val):
+            return json.dumps(val).replace("<", "\\u003c").replace(">", "\\u003e")
+
+        _safe_token = _js_safe(token)
+        _safe_user_id = _js_safe(user_id)
+        _safe_server_id = _js_safe(server_id)
         if not token or not user_id:
             return redirect("https://jellyfin.meduseld.io")
         return (
@@ -5071,9 +5079,9 @@ def jellyfin_catch_all(path):
 <style>@keyframes spin{{from{{transform:rotate(0deg)}}to{{transform:rotate(360deg)}}}}</style>
 <script>
 (function() {{
-    var token = {json.dumps(token)};
-    var userId = {json.dumps(user_id)};
-    var serverId = {json.dumps(server_id)};
+    var token = {_safe_token};
+    var userId = {_safe_user_id};
+    var serverId = {_safe_server_id};
     var POLL_INTERVAL = 250;
     var MAX_WAIT = 15000;
     var elapsed = 0;
