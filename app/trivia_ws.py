@@ -1105,6 +1105,7 @@ def on_start_game(data):
         {
             "countdown": COUNTDOWN_SECONDS,
             "total_questions": len(questions),
+            "category_name": lobby.settings.get("category_name", ""),
         },
         room=code,
         namespace="/trivia",
