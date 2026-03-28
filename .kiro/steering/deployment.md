@@ -77,6 +77,15 @@ Served via Cloudflare Pages at `/srv/meduseld-site`
   - File uploads stored at `/srv/media/fame/`, served via `/check/fame-media/<filename>`
   - Data from `health.meduseld.io/check/fame*` endpoints
 
+- **dnd.meduseld.io** (dnd/index.html)
+  - D&D Companion — session hub, DM soundboard, and campaign wiki
+  - Session links panel (admin-managed quick-launch buttons for Roll20, D&D Beyond, etc.)
+  - Party roster (each user saves their character info with D&D Beyond link)
+  - DM soundboard (admin only — upload/play ambient and SFX audio, client-side playback)
+  - Campaign wiki with session recaps and freeform wiki pages (markdown, categories, search)
+  - Sound files stored at `/srv/media/dnd/sounds/`, served via `/check/dnd-sound-file/<filename>`
+  - Data from `health.meduseld.io/check/dnd-*` endpoints
+
 - **wiki.meduseld.io** (served by wiki microservice)
   - Static mirror of the Icarus wiki from `icarus.wiki.gg`
   - Served by standalone Python HTTP server on port 5005 from `/srv/wiki/icarus`
@@ -388,6 +397,83 @@ Table: `fame_votes`
 
 Unique constraint: `(user_id, entry_id)` — one vote per user per entry. Vote count is denormalized on `FameEntry.vote_count` for sort performance.
 
+### DndLink Model (`app/models.py`)
+
+Table: `dnd_links`
+
+| Column      | Type        | Notes                                         |
+| ----------- | ----------- | --------------------------------------------- |
+| id          | Integer     | Primary key                                   |
+| label       | String(128) | Link display label                            |
+| url         | String(512) | Link URL                                      |
+| icon        | String(64)  | Bootstrap icon class, default `bi-link-45deg` |
+| description | String(256) | Optional description                          |
+| sort_order  | Integer     | Display order, default 0                      |
+| created_by  | Integer     | FK to `users.id`                              |
+| created_at  | DateTime    | UTC, auto-set on creation                     |
+
+### DndCharacter Model (`app/models.py`)
+
+Table: `dnd_characters`
+
+| Column         | Type        | Notes                          |
+| -------------- | ----------- | ------------------------------ |
+| id             | Integer     | Primary key                    |
+| user_id        | Integer     | FK to `users.id`               |
+| character_name | String(128) | Character display name         |
+| race           | String(64)  | Character race (optional)      |
+| class_name     | String(64)  | Character class (optional)     |
+| level          | Integer     | Character level, default 1     |
+| beyond_url     | String(512) | D&D Beyond character sheet URL |
+| created_at     | DateTime    | UTC, auto-set on creation      |
+| updated_at     | DateTime    | UTC, updated on edit           |
+
+Unique constraint: `(user_id)` — one character per user.
+
+### DndSound Model (`app/models.py`)
+
+Table: `dnd_sounds`
+
+| Column      | Type        | Notes                                                 |
+| ----------- | ----------- | ----------------------------------------------------- |
+| id          | Integer     | Primary key                                           |
+| label       | String(128) | Sound display label                                   |
+| icon        | String(64)  | Bootstrap icon class, default `bi-music-note-beamed`  |
+| file_path   | String(512) | Server path (e.g. `/srv/media/dnd/sounds/<uuid>.mp3`) |
+| sound_type  | String(16)  | `ambient` (loops) or `sfx` (plays once)               |
+| uploaded_by | Integer     | FK to `users.id`                                      |
+| created_at  | DateTime    | UTC, auto-set on creation                             |
+
+### DndSession Model (`app/models.py`)
+
+Table: `dnd_sessions`
+
+| Column       | Type        | Notes                           |
+| ------------ | ----------- | ------------------------------- |
+| id           | Integer     | Primary key                     |
+| title        | String(256) | Session recap title             |
+| session_date | Date        | When the session occurred       |
+| body         | Text        | Markdown content                |
+| tags         | String(512) | Comma-separated tags (optional) |
+| created_by   | Integer     | FK to `users.id`                |
+| created_at   | DateTime    | UTC, auto-set on creation       |
+| updated_at   | DateTime    | UTC, updated on edit            |
+
+### DndWikiPage Model (`app/models.py`)
+
+Table: `dnd_wiki_pages`
+
+| Column     | Type        | Notes                                                       |
+| ---------- | ----------- | ----------------------------------------------------------- |
+| id         | Integer     | Primary key                                                 |
+| title      | String(256) | Page title                                                  |
+| category   | String(64)  | `general`, `npcs`, `locations`, `items`, `factions`, `lore` |
+| body       | Text        | Markdown content                                            |
+| image_url  | String(512) | Optional image URL                                          |
+| created_by | Integer     | FK to `users.id`                                            |
+| created_at | DateTime    | UTC, auto-set on creation                                   |
+| updated_at | DateTime    | UTC, updated on edit                                        |
+
 ### Database Commands
 
 ```bash
@@ -621,7 +707,7 @@ Three lightweight Python HTTP servers run independently of the Flask app so the 
    - Auto-sync: `meduseld-wiki-scrape.timer` runs weekly (Sunday 04:00 UTC, 30-min random delay)
    - Env: `WIKI_DIR` (default `/srv/wiki/icarus`)
 
-Flask proxy routing (`check_service()` in `webserver.py`): requests to `health.meduseld.io/check/stats` → `127.0.0.1:5004/stats`, `/check/history` → `127.0.0.1:5004/history`, `/check/backup` → `127.0.0.1:5003/backup`, `/check/backup-status` → `127.0.0.1:5003/status`, `/check/reboot` → `127.0.0.1:5002/reboot`, `/check/wiki-health` → `127.0.0.1:5005/health`, `/check/system-logs` → Flask's own `api_server_logs()`, `/check/media-auth` → Jellyfin SSO auth (authenticated, calls `_jellyfin_auth_inner()` to auto-provision and authenticate a Jellyfin account, returns `{token, user_id, server_id}`), `/check/seerr-auth` → Jellyseerr SSO auth (authenticated, provisions Jellyfin account then serves HTML page that POSTs credentials to Jellyseerr from the browser so `connect.sid` is set on the correct domain), `/check/team-roster` → admin users list with trivia stats (authenticated via CF_Authorization JWT passed as `cf_token` query param or `_cf_token` in body; each user includes a `trivia` object with `games_played`, `total_correct`, `total_wrong`, `total_questions`, `best_score`, `accuracy`), `/check/team-roster-<id>` → admin user update (PUT), `/check/calendar` → calendar events list (GET) and create (POST, admin only), `/check/calendar-<id>` → delete calendar event (DELETE, admin only) or edit calendar event (PUT with `title`/`event_date`, admin only) or RSVP (PUT with `status`, any authenticated user), `/check/game-votes` → game voting (GET returns aggregated scores + user's rankings, PUT submits user's ranked list), `/check/games` → games list (GET returns all games, POST adds a game — authenticated), `/check/games-<app_id>` → delete game (DELETE, admin only — also removes associated votes), `/check/trivia-lobbies` → list active multiplayer trivia lobbies (GET, public — returns lobbies with status `waiting`), `/check/trivia-leaderboard` → trivia leaderboard (GET, public — returns aggregated wins per user, only counting games where `won=True`, sorted by win count), `/check/trivia-record-win` → record a trivia game result (POST, authenticated — body: `{score, total_questions, category?, _cf_token}`), `/check/profile` → user profile with achievements and trivia stats (GET, authenticated — runs achievement checks and returns full profile data with all achievements and their locked/unlocked status), `/check/picker-current` → current week's game pick (GET, public), `/check/picker-spin` → spin the wheel to pick a game (POST, authenticated — admins can re-spin), `/check/picker-history` → past weekly picks (GET, public), `/check/picker-games` → game pool list (GET, public) and add game (POST, admin only), `/check/picker-games-<id>` → soft-delete game from pool (DELETE, admin only), `/check/fellowsync-rooms` → FellowSync active rooms (GET, public — proxies to `127.0.0.1:5050/api/rooms/active`, returns `{rooms, count}`, gracefully returns empty list if FellowSync is down), `/check/remote-sessions` → list active remote desktop sessions (GET, public — returns `{sessions}` from in-memory state, cleans up expired sessions on each call), `/check/fame` → Hall of Fame entries (GET public with optional auth for vote status, POST authenticated — file upload or JSON link), `/check/fame-<id>` → delete fame entry (DELETE, owner or admin), `/check/fame-<id>-vote` → toggle vote on entry (POST, authenticated), `/check/fame-media/<filename>` → serve uploaded fame media files from `/srv/media/fame/` (GET, public, dedicated Flask route with 24h cache). All authenticated endpoints use `_authenticate_from_cookie()` which reads the CF_Authorization JWT from cookie, header, `cf_token` query param, `_cf_token` in JSON body, or `_cf_token` in form data.
+Flask proxy routing (`check_service()` in `webserver.py`): requests to `health.meduseld.io/check/stats` → `127.0.0.1:5004/stats`, `/check/history` → `127.0.0.1:5004/history`, `/check/backup` → `127.0.0.1:5003/backup`, `/check/backup-status` → `127.0.0.1:5003/status`, `/check/reboot` → `127.0.0.1:5002/reboot`, `/check/wiki-health` → `127.0.0.1:5005/health`, `/check/system-logs` → Flask's own `api_server_logs()`, `/check/media-auth` → Jellyfin SSO auth (authenticated, calls `_jellyfin_auth_inner()` to auto-provision and authenticate a Jellyfin account, returns `{token, user_id, server_id}`), `/check/seerr-auth` → Jellyseerr SSO auth (authenticated, provisions Jellyfin account then serves HTML page that POSTs credentials to Jellyseerr from the browser so `connect.sid` is set on the correct domain), `/check/team-roster` → admin users list with trivia stats (authenticated via CF_Authorization JWT passed as `cf_token` query param or `_cf_token` in body; each user includes a `trivia` object with `games_played`, `total_correct`, `total_wrong`, `total_questions`, `best_score`, `accuracy`), `/check/team-roster-<id>` → admin user update (PUT), `/check/calendar` → calendar events list (GET) and create (POST, admin only), `/check/calendar-<id>` → delete calendar event (DELETE, admin only) or edit calendar event (PUT with `title`/`event_date`, admin only) or RSVP (PUT with `status`, any authenticated user), `/check/game-votes` → game voting (GET returns aggregated scores + user's rankings, PUT submits user's ranked list), `/check/games` → games list (GET returns all games, POST adds a game — authenticated), `/check/games-<app_id>` → delete game (DELETE, admin only — also removes associated votes), `/check/trivia-lobbies` → list active multiplayer trivia lobbies (GET, public — returns lobbies with status `waiting`), `/check/trivia-leaderboard` → trivia leaderboard (GET, public — returns aggregated wins per user, only counting games where `won=True`, sorted by win count), `/check/trivia-record-win` → record a trivia game result (POST, authenticated — body: `{score, total_questions, category?, _cf_token}`), `/check/profile` → user profile with achievements and trivia stats (GET, authenticated — runs achievement checks and returns full profile data with all achievements and their locked/unlocked status), `/check/picker-current` → current week's game pick (GET, public), `/check/picker-spin` → spin the wheel to pick a game (POST, authenticated — admins can re-spin), `/check/picker-history` → past weekly picks (GET, public), `/check/picker-games` → game pool list (GET, public) and add game (POST, admin only), `/check/picker-games-<id>` → soft-delete game from pool (DELETE, admin only), `/check/fellowsync-rooms` → FellowSync active rooms (GET, public — proxies to `127.0.0.1:5050/api/rooms/active`, returns `{rooms, count}`, gracefully returns empty list if FellowSync is down), `/check/remote-sessions` → list active remote desktop sessions (GET, public — returns `{sessions}` from in-memory state, cleans up expired sessions on each call), `/check/fame` → Hall of Fame entries (GET public with optional auth for vote status, POST authenticated — file upload or JSON link), `/check/fame-<id>` → delete fame entry (DELETE, owner or admin), `/check/fame-<id>-vote` → toggle vote on entry (POST, authenticated), `/check/fame-media/<filename>` → serve uploaded fame media files from `/srv/media/fame/` (GET, public, dedicated Flask route with 24h cache), `/check/dnd-links` → D&D session links (GET public, POST admin only), `/check/dnd-links-<id>` → edit/delete link (PUT/DELETE, admin only), `/check/dnd-characters` → party roster (GET public, POST authenticated — upsert own character), `/check/dnd-characters-<id>` → edit/delete character (PUT/DELETE, owner or admin), `/check/dnd-sounds` → soundboard sounds (GET public, POST admin only — multipart file upload), `/check/dnd-sounds-<id>` → delete sound (DELETE, admin only), `/check/dnd-sound-file/<filename>` → serve sound files from `/srv/media/dnd/sounds/` (GET, public, dedicated Flask route with 24h cache), `/check/dnd-sessions` → session recaps (GET public paginated, POST authenticated), `/check/dnd-sessions-<id>` → edit/delete recap (PUT authenticated, DELETE admin only), `/check/dnd-wiki` → wiki pages (GET public with optional `?category=` filter, POST authenticated), `/check/dnd-wiki-<id>` → edit/delete wiki page (PUT authenticated, DELETE admin only), `/check/dnd-search?q=` → search across recaps and wiki pages (GET public). All authenticated endpoints use `_authenticate_from_cookie()` which reads the CF_Authorization JWT from cookie, header, `cf_token` query param, `_cf_token` in JSON body, or `_cf_token` in form data.
 
 ### Common Issues
 
@@ -807,6 +893,30 @@ Events (server → client):
 - `DELETE /check/fame-<id>` - (Authenticated) Delete a fame entry. Owner or admin only. Removes associated votes and deletes uploaded file if applicable. Auth via `cf_token` query param.
 - `POST /check/fame-<id>-vote` - (Authenticated) Toggle vote on an entry. Body: `{_cf_token}`. Returns `{voted, vote_count}`. Creates or removes a `FameVote` row and updates the denormalized `vote_count` on `FameEntry`.
 - `GET /check/fame-media/<filename>` - (Public) Dedicated Flask route (not in `check_service`). Serves uploaded fame media files from `/srv/media/fame/`. Returns file with correct MIME type and 24-hour cache header. Returns 404 for missing files or path traversal attempts.
+
+### D&D Companion Endpoints (via health proxy)
+
+- `GET /check/dnd-links` - (Public) List all session hub links, ordered by `sort_order`.
+- `POST /check/dnd-links` - (Admin only) Add a session link. Body: `{label, url, icon?, description?, sort_order?, _cf_token}`.
+- `PUT /check/dnd-links-<id>` - (Admin only) Edit a session link. Body: `{label?, url?, icon?, description?, sort_order?}`.
+- `DELETE /check/dnd-links-<id>` - (Admin only) Delete a session link. Auth via `cf_token` query param.
+- `GET /check/dnd-characters` - (Public) List all party roster characters.
+- `POST /check/dnd-characters` - (Authenticated) Create or update own character (upsert — one character per user). Body: `{character_name, race?, class_name?, level?, beyond_url?, _cf_token}`.
+- `PUT /check/dnd-characters-<id>` - (Owner or admin) Edit a character. Body: `{character_name?, race?, class_name?, level?, beyond_url?}`.
+- `DELETE /check/dnd-characters-<id>` - (Owner or admin) Delete a character. Auth via `cf_token` query param.
+- `GET /check/dnd-sounds` - (Public) List all soundboard sounds.
+- `POST /check/dnd-sounds` - (Admin only) Upload a sound. `multipart/form-data` with `label`, `icon`, `sound_type` (ambient/sfx), `file` fields. Accepts audio/mpeg, audio/wav, audio/ogg, audio/webm, audio/mp4. Files saved to `/srv/media/dnd/sounds/` with UUID filenames.
+- `DELETE /check/dnd-sounds-<id>` - (Admin only) Delete a sound and its file. Auth via `cf_token` query param.
+- `GET /check/dnd-sound-file/<filename>` - (Public) Dedicated Flask route. Serves sound files from `/srv/media/dnd/sounds/`. 24-hour cache.
+- `GET /check/dnd-sessions` - (Public) List session recaps, paginated. Query params: `page` (default 1), `per_page` (default 20, max 50). Ordered by `session_date` descending.
+- `POST /check/dnd-sessions` - (Authenticated) Create a session recap. Body: `{title, session_date, body, tags?, _cf_token}`.
+- `PUT /check/dnd-sessions-<id>` - (Authenticated) Edit a session recap. Body: `{title?, session_date?, body?, tags?}`.
+- `DELETE /check/dnd-sessions-<id>` - (Admin only) Delete a session recap. Auth via `cf_token` query param.
+- `GET /check/dnd-wiki` - (Public) List wiki pages. Optional query param: `category` (filters by category). Ordered by title ascending.
+- `POST /check/dnd-wiki` - (Authenticated) Create a wiki page. Body: `{title, body, category?, image_url?, _cf_token}`.
+- `PUT /check/dnd-wiki-<id>` - (Authenticated) Edit a wiki page. Body: `{title?, category?, body?, image_url?}`.
+- `DELETE /check/dnd-wiki-<id>` - (Admin only) Delete a wiki page. Auth via `cf_token` query param.
+- `GET /check/dnd-search?q=` - (Public) Search across session recaps and wiki pages. Returns `{results: [{...entry, type: "session"|"wiki"}]}`. Matches title, body, and tags (sessions) via case-insensitive LIKE.
 
 ### Jellyfin Auto-Login
 

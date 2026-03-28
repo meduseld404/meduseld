@@ -94,10 +94,14 @@ Each active service card has a status indicator badge that shows Online/Offline/
    - Description: "Community wiki with guides, tips, and information for [game]."
    - Status check runs alongside the main health check polling (every 5 seconds) but hits the Flask health proxy directly instead of the Cloudflare Worker
 
+10. **D&D Companion**
+    - "Open D&D Companion" button → links to `https://dnd.meduseld.io`
+    - Description: "Session hub, DM soundboard, and campaign wiki for our Roll20 adventures."
+    - No status badge (static page, not health-checked)
+
 ### Service Cards (Coming Soon — Disabled)
 
 - VPN Access — Mullvad remote access
-- D&D Companion — session hub, DM soundboard, and campaign wiki for Roll20 adventures
 - More Services — placeholder
 
 ### Game News Panel (Collapsible)
@@ -842,6 +846,80 @@ Community gallery where authenticated users share and vote on gaming moments. An
 - Vote count updates immediately on toggle
 - POSTs to `https://health.meduseld.io/check/fame-<id>-vote` with `{_cf_token}`
 - Requires authentication
+
+---
+
+## dnd.meduseld.io — D&D Companion
+
+File: `meduseld-site/dnd/index.html`
+
+Session hub, DM soundboard, and campaign wiki for D&D sessions. Any authenticated user can view and contribute. Requires authentication via `MeduseldAuth.requireAuth()`.
+
+### Navigation
+
+- "← Back to Services" button → navigates to `https://services.meduseld.io`
+- Profile widget (top-right, inside header nav bar)
+
+### Session Links Panel
+
+- Displays admin-configured quick-launch links as a grid of clickable cards (e.g. Roll20, D&D Beyond, Discord voice channel)
+- Each link card shows icon, label, optional description, and opens URL in new tab
+- Admin sees "+" button to add links, edit (pencil) and delete (trash) buttons on each link
+- Links stored in DB (`dnd_links` table), ordered by `sort_order`
+- Add/Edit modal: label, URL, Bootstrap icon class, description, sort order
+- Data from `GET https://health.meduseld.io/check/dnd-links`
+
+### Party Roster
+
+- Grid of character cards showing each user's D&D character
+- Each card: Discord avatar, character name, player display name, race/class/level, "View Sheet" button (links to D&D Beyond character URL)
+- "My Character" button → opens modal to create/update own character (one character per user, upsert)
+- Modal fields: character name, race, class, level (1-20), D&D Beyond character URL
+- Pre-fills with existing character data on modal open
+- Data from `GET https://health.meduseld.io/check/dnd-characters`
+
+### DM Soundboard (Admin Only)
+
+- Visible only to admin users
+- Grid of audio trigger buttons, each with icon, label, type badge (ambient/SFX), and per-sound volume slider
+- Click to play, click again to stop — multiple sounds can layer simultaneously
+- Ambient sounds loop, SFX sounds play once
+- Master volume slider and "Stop All" button in the header
+- "Upload" button → opens modal with label, icon class, type (SFX/ambient), and file picker (accepts audio/\*)
+- Admin delete button below each sound
+- Audio files stored on server at `/srv/media/dnd/sounds/`, served via `GET /check/dnd-sound-file/<filename>`
+- Audio plays locally in the admin's browser (client-side Web Audio)
+- Data from `GET https://health.meduseld.io/check/dnd-sounds`
+
+### Campaign Wiki
+
+- Tabbed interface with two content types: "Session Recaps" and "Wiki Pages"
+- Search bar filters across both recaps and wiki pages via `GET /check/dnd-search?q=`
+- "New" button → opens entry creation modal
+
+#### Session Recaps Tab (default)
+
+- Chronological list of session summaries, newest first
+- Latest session pinned at top with gold border and "LATEST" badge
+- Each recap card shows: title, session date, tag badges (comma-separated), rendered markdown body, author avatar and name
+- Edit button (pencil) on each recap — any authenticated user can edit
+- Delete button (trash, admin only) on each recap
+- Data from `GET https://health.meduseld.io/check/dnd-sessions`
+
+#### Wiki Pages Tab
+
+- Category filter buttons: All, General, NPCs, Locations, Items, Factions, Lore
+- Each wiki card shows: category badge, title, optional image, rendered markdown body, author avatar and name, last updated date
+- Edit button (pencil) — any authenticated user can edit
+- Delete button (trash, admin only)
+- Data from `GET https://health.meduseld.io/check/dnd-wiki?category=`
+
+#### Entry Modal (shared for both types)
+
+- Type selector: Session Recap or Wiki Page (disabled when editing)
+- Session Recap fields: title, session date, tags (comma-separated), content (markdown)
+- Wiki Page fields: title, category dropdown, image URL (optional), content (markdown)
+- Content supports basic markdown rendering (headings, bold, italic, code, lists)
 
 ---
 
