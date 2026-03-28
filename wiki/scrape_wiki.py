@@ -222,15 +222,18 @@ def download_images(html_dir):
     """Download images referenced in the HTML files."""
     img_urls = set()
     for html_file in html_dir.glob("*.html"):
-        content = html_file.read_text(errors="replace")
-        # Find image src attributes pointing to wiki.gg
-        for match in re.finditer(
-            r'src="(https://[^"]*wiki\.gg[^"]*\.(png|jpg|jpeg|gif|svg|webp|ico))"', content, re.I
-        ):
-            img_urls.add(match.group(1))
-        # Also find relative image paths
-        for match in re.finditer(r'src="(/images/[^"]*)"', content):
-            img_urls.add(f"{WIKI_BASE}{match.group(1)}")
+        try:
+            content = html_file.read_text(errors="replace")
+            for match in re.finditer(
+                r'src="(https://[^"]*wiki\.gg[^"]*\.(png|jpg|jpeg|gif|svg|webp|ico))"',
+                content,
+                re.I,
+            ):
+                img_urls.add(match.group(1))
+            for match in re.finditer(r'src="(/images/[^"]*)"', content):
+                img_urls.add(f"{WIKI_BASE}{match.group(1)}")
+        except Exception as e:
+            log.warning("Failed to scan %s for images: %s", html_file.name, e)
 
     if not img_urls:
         return 0
@@ -239,9 +242,19 @@ def download_images(html_dir):
     img_dir.mkdir(exist_ok=True)
     count = 0
 
+    # Build URL-to-local-filename mapping
+    url_to_local = {}
+    for url in img_urls:
+        parsed = urllib.parse.urlparse(url)
+        filename = Path(parsed.path).name
+        if filename:
+            url_to_local[url] = f"images/{filename}"
+            # Also map the relative path
+            url_to_local[parsed.path] = f"images/{filename}"
+
+    # Download images
     for url in img_urls:
         try:
-            # Create a safe local filename from the URL
             parsed = urllib.parse.urlparse(url)
             filename = Path(parsed.path).name
             if not filename:
@@ -259,17 +272,19 @@ def download_images(html_dir):
             log.warning("Failed to download image %s: %s", url, e)
 
     # Rewrite image src in HTML files to point to local copies
+    log.info("Rewriting image paths in HTML files...")
     for html_file in html_dir.glob("*.html"):
-        content = html_file.read_text(errors="replace")
-        for url in img_urls:
-            parsed = urllib.parse.urlparse(url)
-            filename = Path(parsed.path).name
-            if filename:
-                content = content.replace(url, f"images/{filename}")
-                # Also rewrite the relative /images/ path
-                rel_path = parsed.path
-                content = content.replace(f'src="{rel_path}"', f'src="images/{filename}"')
-        html_file.write_text(content)
+        try:
+            content = html_file.read_text(errors="replace")
+            modified = False
+            for old_url, new_path in url_to_local.items():
+                if old_url in content:
+                    content = content.replace(old_url, new_path)
+                    modified = True
+            if modified:
+                html_file.write_text(content, encoding="utf-8")
+        except Exception as e:
+            log.warning("Failed to rewrite images in %s: %s", html_file.name, e)
 
     return count
 
