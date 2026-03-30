@@ -14,6 +14,7 @@ Minimal splash page with a "404 Server Not Found" joke theme.
 - "Looking for Herugrim?" link → navigates to `https://herugrim.meduseld.io`
 - "Looking for FellowSync?" link → navigates to `https://fellowsync.meduseld.io`
 - "Looking for ExSpire?" link → navigates to `https://exspire.meduseld.io`
+- "Looking for Lembas?" link → navigates to `https://lembas.meduseld.io`
 - Footer links: quietarcade website, dynamic version badge (fetches latest release tag from GitHub API, links to release page)
 - Copyright year auto-fills via JS
 
@@ -975,6 +976,23 @@ Served by standalone wiki microservice (`wiki/wiki_server.py`) on port 5005 from
 - Image URLs made absolute to wiki.gg (browsers load them directly, bypassing Cloudflare bot detection)
 - Wiki CSS stylesheets linked from wiki.gg CDN (not embedded — Cloudflare blocks programmatic downloads but browsers load them fine)
 - Edit/login UI stripped, tracking scripts removed
+
+---
+
+## lembas.meduseld.io — Lembas (Shopping List PWA)
+
+File: `meduseld-site/lembas/index.html`
+
+Standalone PWA shopping list app. Fully client-side with localStorage persistence. No authentication required, no backend.
+
+- Two tabs: Shopping List and Regulars
+- Shopping List tab: add items via text input, adjust quantity (+/-), check off items, clear checked items
+- Typing in the input shows autocomplete suggestions from saved regular items
+- Star button on each item toggles it as a "regular" (saved for future lists)
+- Regulars tab: grid of starred items. Tap to add back to current list, x to remove from regulars
+- Service worker for offline PWA support (network-first with cache fallback)
+- PWA installable via manifest (standalone display mode)
+- All data stored in browser localStorage (`lembas_items`, `lembas_regulars`)
 
 ---
 
