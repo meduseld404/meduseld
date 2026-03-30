@@ -100,7 +100,6 @@ Each active service card has a status indicator badge that shows Online/Offline/
 
 ### Service Cards (Coming Soon — Disabled)
 
-- VPN Access — Mullvad remote access
 - More Services — placeholder
 
 ### Game News Panel (Collapsible)
