@@ -92,7 +92,7 @@ Served via Cloudflare Pages at `/srv/meduseld-site`
   - No authentication required, no backend
   - React 19 + Vite 6 frontend, source in separate `lembas` workspace folder
   - Deployed as its own Cloudflare Pages project directly from the `lembas` repo, with custom domain `lembas.meduseld.io` (not served from meduseld-site or the Ubuntu server)
-  - Features: long-press to drag reorder, drag-to-delete zone, tap-to-edit with price/aisle fields (shopping), simple checklist with clear completed (to-do)
+  - Features: grip-handle drag to reorder, drag-to-delete zone, tap-to-edit with price/aisle fields (shopping), simple checklist with clear completed (to-do)
   - PWA with service worker for offline support
   - The `meduseld-site/lembas/` folder contains a legacy vanilla JS version (not the current React app)
   - Repo: `git@github.com:meduseld-io/lembas.git` (separate `lembas` workspace folder)

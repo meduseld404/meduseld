@@ -1003,7 +1003,7 @@ Standalone PWA with two modes: To-Do (default) and Shopping. Fully client-side w
 - Tasks header shows pending count
 - Tap checkbox to toggle done/undone - completed tasks move to a "Completed" section at the bottom
 - Star button on each task to save as a regular
-- Drag-to-reorder via long press (300ms, same as shopping mode, uses `@dnd-kit`)
+- Drag-to-reorder via grip handle icon (⠿) on the left of each task (uses `@dnd-kit`)
 - During drag, a red delete drop zone appears at the bottom
 - "Clear" button in the completed section header removes all completed tasks
 - Empty state shows a checklist icon with "No tasks yet" message
@@ -1013,7 +1013,7 @@ Standalone PWA with two modes: To-Do (default) and Shopping. Fully client-side w
 
 - Add items via text input with autocomplete suggestions from saved regular items
 - Estimated shop total shown as a green pill badge next to "Items" header (sum of all item prices x quantities, only visible when items have prices)
-- Drag-to-reorder items via long press (300ms hold activates drag, uses `@dnd-kit`, works on touch and desktop)
+- Drag-to-reorder items via grip handle icon (⠿) on the left of each item (uses `@dnd-kit`, works on touch and desktop)
 - Tap/click any item to open edit modal with: name, quantity, last price, aisle/store location
 - Edit modal slides up as a bottom sheet on mobile, centers on desktop. Close via Escape, overlay click, or Cancel button.
 - During drag, a red delete drop zone appears at the bottom of the screen - drop item on it to delete
